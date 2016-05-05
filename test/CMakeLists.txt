@@ -1,4 +1,4 @@
-add_executable (composite_object_test main.cpp)
+add_executable (composite_object_test main.cpp test.hpp)
 
 target_link_libraries (composite_object_test composite_object)
 

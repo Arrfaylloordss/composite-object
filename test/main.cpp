@@ -1,5 +1,4 @@
-#include "../composite_object/composite_object.hpp"
-
+#include "test.hpp"
 
 int main(int argc, char *args[])
 {
