@@ -28,7 +28,7 @@ template
     class Base,
     class BaseIteratorCategory = std::bidirectional_iterator_tag
     >
-class interface;
+class abstract;
 
 template <class Base> class leaf;
 
@@ -70,14 +70,16 @@ class bf_hierarchical_iterator_template;
 //
 
 template <class Base, class BaseIteratorCategory>
-class interface : public Base
+class abstract : public Base
 {
+    using self = abstract;
+
 public:
     struct iterator_traits
     {
         using iterator_category    = BaseIteratorCategory;
-        using value_type           = std::shared_ptr<interface>;
-        using const_value_type     = const std::shared_ptr<interface>;
+        using value_type           = std::shared_ptr<self>;
+        using const_value_type     = const std::shared_ptr<self>;
         using reference            = value_type&;
         using const_reference      = const_value_type&;
         using pointer              = value_type*;
@@ -166,32 +168,131 @@ public:
     virtual const_reverse_iterator crbegin() const = 0;
     virtual const_reverse_iterator crend() const = 0;
 
-    virtual df_pre_order_hierarchical_iterator df_pre_order_begin() = 0;
-    virtual df_pre_order_hierarchical_iterator df_pre_order_end() = 0;
-    virtual const_df_pre_order_hierarchical_iterator cdf_pre_order_begin() const = 0;
-    virtual const_df_pre_order_hierarchical_iterator cdf_pre_order_end() const = 0;
-    virtual reverse_df_pre_order_hierarchical_iterator rdf_pre_order_begin() = 0;
-    virtual reverse_df_pre_order_hierarchical_iterator rdf_pre_order_end() = 0;
-    virtual const_reverse_df_pre_order_hierarchical_iterator crdf_pre_order_begin() const = 0;
-    virtual const_reverse_df_pre_order_hierarchical_iterator crdf_pre_order_end() const = 0;
+    // Pre-order iterators
 
-    virtual df_post_order_hierarchical_iterator df_post_order_begin() = 0;
-    virtual df_post_order_hierarchical_iterator df_post_order_end() = 0;
-    virtual const_df_post_order_hierarchical_iterator cdf_post_order_begin() const = 0;
-    virtual const_df_post_order_hierarchical_iterator cdf_post_order_end() const = 0;
-    virtual reverse_df_post_order_hierarchical_iterator rdf_post_order_begin() = 0;
-    virtual reverse_df_post_order_hierarchical_iterator rdf_post_order_end() = 0;
-    virtual const_reverse_df_post_order_hierarchical_iterator crdf_post_order_begin() const = 0;
-    virtual const_reverse_df_post_order_hierarchical_iterator crdf_post_order_end() const = 0;
+    auto df_pre_order_begin()
+    {
+        return df_pre_order_hierarchical_iterator(begin(), end());
+    }
 
-    virtual bf_hierarchical_iterator bf_begin() = 0;
-    virtual bf_hierarchical_iterator bf_end() = 0;
-    virtual const_bf_hierarchical_iterator cbf_begin() const = 0;
-    virtual const_bf_hierarchical_iterator cbf_end() const = 0;
-    virtual reverse_bf_hierarchical_iterator rbf_begin() = 0;
-    virtual reverse_bf_hierarchical_iterator rbf_end() = 0;
-    virtual const_reverse_bf_hierarchical_iterator crbf_begin() const = 0;
-    virtual const_reverse_bf_hierarchical_iterator crbf_end() const = 0;
+    auto df_pre_order_end()
+    {
+        return df_pre_order_hierarchical_iterator(end(), end());
+    }
+
+    auto cdf_pre_order_begin() const
+    {
+        return const_df_pre_order_hierarchical_iterator(cbegin(), cend());
+    }
+
+    auto cdf_pre_order_end() const
+    {
+        return const_df_pre_order_hierarchical_iterator(cend(), cend());
+    }
+
+    auto rdf_pre_order_begin()
+    {
+        return reverse_df_pre_order_hierarchical_iterator(rbegin(), rend());
+    }
+
+    auto rdf_pre_order_end()
+    {
+        return reverse_df_pre_order_hierarchical_iterator(rend(), rend());
+    }
+
+    auto crdf_pre_order_begin() const
+    {
+        return const_reverse_df_pre_order_hierarchical_iterator(crbegin(), crend());
+    }
+
+    auto crdf_pre_order_end() const
+    {
+        return const_reverse_df_pre_order_hierarchical_iterator(crend(), crend());
+    }
+
+    // Post-order iterators
+
+    auto df_post_order_begin()
+    {
+        return df_post_order_hierarchical_iterator(begin(), end());
+    }
+
+    auto df_post_order_end()
+    {
+        return df_post_order_hierarchical_iterator(end(), end());
+    }
+
+    auto cdf_post_order_begin() const
+    {
+        return const_df_post_order_hierarchical_iterator(cbegin(), cend());
+    }
+
+    auto cdf_post_order_end() const
+    {
+        return const_df_post_order_hierarchical_iterator(cend(), cend());
+    }
+
+    auto rdf_post_order_begin()
+    {
+        return reverse_df_post_order_hierarchical_iterator(rbegin(), rend());
+    }
+
+    auto rdf_post_order_end()
+    {
+        return reverse_df_post_order_hierarchical_iterator(rend(), rend());
+    }
+
+    auto crdf_post_order_begin() const
+    {
+        return const_reverse_df_post_order_hierarchical_iterator(crbegin(), crend());
+    }
+
+    auto crdf_post_order_end() const
+    {
+        return const_reverse_df_post_order_hierarchical_iterator(crend(), crend());
+    }
+
+    // Breadth-first iterators
+
+    auto bf_begin()
+    {
+        return bf_hierarchical_iterator(begin(), end());
+    }
+
+    auto bf_end()
+    {
+        return bf_hierarchical_iterator();
+    }
+
+    auto cbf_begin() const
+    {
+        return const_bf_hierarchical_iterator(cbegin(), cend());
+    }
+
+    auto cbf_end() const
+    {
+        return const_bf_hierarchical_iterator();
+    }
+
+    auto rbf_begin()
+    {
+        return reverse_bf_hierarchical_iterator(rbegin(), rend());
+    }
+
+    auto rbf_end()
+    {
+        return reverse_bf_hierarchical_iterator();
+    }
+
+    auto crbf_begin() const
+    {
+        return const_reverse_bf_hierarchical_iterator(crbegin(), crend());
+    }
+
+    auto crbf_end() const
+    {
+        return const_reverse_bf_hierarchical_iterator();
+    }
 };
 
 
@@ -310,8 +411,6 @@ public:
     {
     }
 
-    // linear iterators
-
     iterator begin() override
     {
         return end();
@@ -350,128 +449,6 @@ public:
     const_reverse_iterator crend() const override
     {
         return const_reverse_iterator(std::make_unique<leaf_iterator_impl<const_reverse_iterator>>());
-    }
-
-    // hierarchical depth first traversal iterators
-
-    df_pre_order_hierarchical_iterator df_pre_order_begin() override
-    {
-        return df_pre_order_end();
-    }
-
-    df_pre_order_hierarchical_iterator df_pre_order_end() override
-    {
-        return df_pre_order_hierarchical_iterator(end(), end());
-    }
-
-    const_df_pre_order_hierarchical_iterator cdf_pre_order_begin() const override
-    {
-        return cdf_pre_order_end();
-    }
-
-    const_df_pre_order_hierarchical_iterator cdf_pre_order_end() const override
-    {
-        return const_df_pre_order_hierarchical_iterator(cend(), cend());
-    }
-
-    reverse_df_pre_order_hierarchical_iterator rdf_pre_order_begin() override
-    {
-        return rdf_pre_order_end();
-    }
-
-    reverse_df_pre_order_hierarchical_iterator rdf_pre_order_end() override
-    {
-        return reverse_df_pre_order_hierarchical_iterator(rend(), rend());
-    }
-
-    const_reverse_df_pre_order_hierarchical_iterator crdf_pre_order_begin() const override
-    {
-        return crdf_pre_order_end();
-    }
-
-    const_reverse_df_pre_order_hierarchical_iterator crdf_pre_order_end() const override
-    {
-        return const_reverse_df_pre_order_hierarchical_iterator(crend(), crend());
-    }
-   
-    df_post_order_hierarchical_iterator df_post_order_begin() override
-    {
-        return df_post_order_end();
-    }
-
-    df_post_order_hierarchical_iterator df_post_order_end() override
-    {
-        return df_post_order_hierarchical_iterator(end(), end());
-    }
-
-    const_df_post_order_hierarchical_iterator cdf_post_order_begin() const override
-    {
-        return cdf_post_order_end();
-    }
-
-    const_df_post_order_hierarchical_iterator cdf_post_order_end() const override
-    {
-        return const_df_post_order_hierarchical_iterator(cend(), cend());
-    }
-
-    reverse_df_post_order_hierarchical_iterator rdf_post_order_begin() override
-    {
-        return rdf_post_order_end();
-    }
-
-    reverse_df_post_order_hierarchical_iterator rdf_post_order_end() override
-    {
-        return reverse_df_post_order_hierarchical_iterator(rend(), rend());
-    }
-
-    const_reverse_df_post_order_hierarchical_iterator crdf_post_order_begin() const override
-    {
-        return crdf_post_order_end();
-    }
-
-    const_reverse_df_post_order_hierarchical_iterator crdf_post_order_end() const override
-    {
-        return const_reverse_df_post_order_hierarchical_iterator(crend(), crend());
-    }
-
-    bf_hierarchical_iterator bf_begin() override
-    {
-        return bf_hierarchical_iterator(begin(), end());
-    }
-
-    bf_hierarchical_iterator bf_end() override
-    {
-        return bf_hierarchical_iterator();
-    }
-
-    const_bf_hierarchical_iterator cbf_begin() const override
-    {
-        return const_bf_hierarchical_iterator(cbegin(), cend());
-    }
-
-    const_bf_hierarchical_iterator cbf_end() const override
-    {
-        return const_bf_hierarchical_iterator();
-    }
-
-    reverse_bf_hierarchical_iterator rbf_begin() override
-    {
-        return reverse_bf_hierarchical_iterator(rbegin(), rend());
-    }
-
-    reverse_bf_hierarchical_iterator rbf_end() override
-    {
-        return reverse_bf_hierarchical_iterator();
-    }
-
-    const_reverse_bf_hierarchical_iterator crbf_begin() const override
-    {
-        return const_reverse_bf_hierarchical_iterator(crbegin(), crend());
-    }
-    
-    const_reverse_bf_hierarchical_iterator crbf_end() const override
-    {
-        return const_reverse_bf_hierarchical_iterator();
     }
 
     void clear() override
@@ -732,128 +709,6 @@ public:
     const_reverse_iterator crend() const override
     {
         return const_reverse_iterator(std::make_unique<const_reverse_iterator_impl>(children.crend()));
-    }
-
-    // hierarchical iterators
-
-    df_pre_order_hierarchical_iterator df_pre_order_begin() override
-    {
-        return df_pre_order_hierarchical_iterator(begin(), end());
-    }
-
-    df_pre_order_hierarchical_iterator df_pre_order_end() override
-    {
-        return df_pre_order_hierarchical_iterator(end(), end());
-    }
-
-    const_df_pre_order_hierarchical_iterator cdf_pre_order_begin() const override
-    {
-        return const_df_pre_order_hierarchical_iterator(cbegin(), cend());
-    }
-
-    const_df_pre_order_hierarchical_iterator cdf_pre_order_end() const override
-    {
-        return const_df_pre_order_hierarchical_iterator(cend(), cend());
-    }
-
-    reverse_df_pre_order_hierarchical_iterator rdf_pre_order_begin() override
-    {
-        return reverse_df_pre_order_hierarchical_iterator(rbegin(), rend());
-    }
-
-    reverse_df_pre_order_hierarchical_iterator rdf_pre_order_end() override
-    {
-        return reverse_df_pre_order_hierarchical_iterator(rend(), rend());
-    }
-
-    const_reverse_df_pre_order_hierarchical_iterator crdf_pre_order_begin() const override
-    {
-        return const_reverse_df_pre_order_hierarchical_iterator(crbegin(), crend());
-    }
-
-    const_reverse_df_pre_order_hierarchical_iterator crdf_pre_order_end() const override
-    {
-        return const_reverse_df_pre_order_hierarchical_iterator(crend(), crend());
-    }
-
-    df_post_order_hierarchical_iterator df_post_order_begin() override
-    {
-        return df_post_order_hierarchical_iterator(begin(), end());
-    }
-
-    df_post_order_hierarchical_iterator df_post_order_end() override
-    {
-        return df_post_order_hierarchical_iterator(end(), end());
-    }
-
-    const_df_post_order_hierarchical_iterator cdf_post_order_begin() const override
-    {
-        return const_df_post_order_hierarchical_iterator(cbegin(), cend());
-    }
-
-    const_df_post_order_hierarchical_iterator cdf_post_order_end() const override
-    {
-        return const_df_post_order_hierarchical_iterator(cend(), cend());
-    }
-
-    reverse_df_post_order_hierarchical_iterator rdf_post_order_begin() override
-    {
-        return reverse_df_post_order_hierarchical_iterator(rbegin(), rend());
-    }
-
-    reverse_df_post_order_hierarchical_iterator rdf_post_order_end() override
-    {
-        return reverse_df_post_order_hierarchical_iterator(rend(), rend());
-    }
-
-    const_reverse_df_post_order_hierarchical_iterator crdf_post_order_begin() const override
-    {
-        return const_reverse_df_post_order_hierarchical_iterator(crbegin(), crend());
-    }
-
-    const_reverse_df_post_order_hierarchical_iterator crdf_post_order_end() const override
-    {
-        return const_reverse_df_post_order_hierarchical_iterator(crend(), crend());
-    }
-
-    bf_hierarchical_iterator bf_begin() override
-    {
-        return bf_hierarchical_iterator(begin(), end());
-    }
-
-    bf_hierarchical_iterator bf_end() override
-    {
-        return bf_hierarchical_iterator();
-    }
-
-    const_bf_hierarchical_iterator cbf_begin() const override
-    {
-        return const_bf_hierarchical_iterator(cbegin(), cend());
-    }
-
-    const_bf_hierarchical_iterator cbf_end() const override
-    {
-        return const_bf_hierarchical_iterator();
-    }
-
-    reverse_bf_hierarchical_iterator rbf_begin() override
-    {
-        return reverse_bf_hierarchical_iterator(rbegin(), rend());
-    }
-
-    reverse_bf_hierarchical_iterator rbf_end() override
-    {
-        return reverse_bf_hierarchical_iterator();
-    }
-
-    const_reverse_bf_hierarchical_iterator crbf_begin() const override
-    {
-        return const_reverse_bf_hierarchical_iterator(crbegin(), crend());
-    }
-
-    const_reverse_bf_hierarchical_iterator crbf_end() const override
-    {
-        return const_reverse_bf_hierarchical_iterator();
     }
 
     void clear() override

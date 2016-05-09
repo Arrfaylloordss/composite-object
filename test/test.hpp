@@ -48,7 +48,7 @@ namespace unittest
     class test_class_composite_abstract;
     class test_class_composite;
     class test_class_leaf;
-    using test_class_composite_interface = composite_object::interface<test_class_interface>;
+    using test_class_composite_interface = composite_object::abstract<test_class_interface>;
 
 
     class test_class_interface
