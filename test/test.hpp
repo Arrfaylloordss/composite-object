@@ -188,9 +188,9 @@ namespace unittest
 
         auto equal_predicate = [](const auto &a, const auto &b) {return a->get_value() == b->get_value(); };
 
-        auto check_func = [](auto &first, auto &last, std::initializer_list<test_class_composite_interface::value_type> &&_expected_result) -> bool
+        auto check_func = [](auto &first, auto &last, std::initializer_list<test_class_composite_interface::iterator_traits::value_type> &&_expected_result) -> bool
         {
-            using result_vector_type = std::vector<test_class_composite_interface::value_type>;
+            using result_vector_type = std::vector<test_class_composite_interface::iterator_traits::value_type>;
             result_vector_type result;
             result_vector_type expected_result(std::move(_expected_result));
             std::copy(first, last, std::back_inserter(result));
