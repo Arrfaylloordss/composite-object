@@ -75,6 +75,9 @@ class abstract : public Base
     using self = abstract;
 
 public:
+    using value_type = std::shared_ptr<self>;
+    using raw_pointer_to_base_interface = self*;
+
     struct iterator_traits
     {
         using iterator_category    = BaseIteratorCategory;
@@ -82,6 +85,7 @@ public:
         using const_value_type     = const std::shared_ptr<self>;
         using reference            = value_type&;
         using const_reference      = const_value_type&;
+        using raw_pointer          = self*;
         using pointer              = value_type*;
         using const_pointer        = const_value_type*;
         using difference_type      = ptrdiff_t;
@@ -158,6 +162,7 @@ public:
     virtual void clear() = 0;
     virtual size_t size() const = 0;
     virtual size_t nested_hierarchy_size() const = 0;
+    virtual raw_pointer_to_base_interface clone() const = 0;
 
     virtual iterator begin() = 0;
     virtual iterator end() = 0;
@@ -308,6 +313,7 @@ public:
     }
 
     using value_type = typename Base::iterator_traits::value_type;
+    using raw_pointer_to_base_interface = typename Base::raw_pointer_to_base_interface;
 
     using iterator = typename Base::iterator;
     using const_iterator = typename Base::const_iterator;
@@ -336,9 +342,10 @@ public:
 template <class Base>
 class leaf : public interface_plug_in<Base>
 {
-public:
+    using self = leaf;
     using parent = interface_plug_in<Base>;
 
+public:
     template <class IteratorBaseType>
     class leaf_iterator_impl : public IteratorBaseType::implementation
     {
@@ -474,15 +481,22 @@ public:
     {
         return false;
     }
+
+    raw_pointer_to_base_interface clone() const override
+    {
+        return new self(*this);
+    }
 };
 
 
 template <class Base, template <class T, class Alloc = std::allocator<T>> class Container>
 class composite : public interface_plug_in<Base>
 {  
+    using self = composite;
+    using parent = interface_plug_in<Base>;
 public:
     using container_type = Container<value_type>;
-    using parent = interface_plug_in<Base>;
+    using initializer_list = std::initializer_list<value_type>;
 
     template <class IteratorTag, class Iterator>
     struct iterator_impl_specific
@@ -654,8 +668,21 @@ public:
     composite() : parent()
     {}
 
-    composite(std::initializer_list<value_type> &&init_list)
-        : parent(), children(init_list)
+    composite(initializer_list &&init_list)
+        : parent(), children(std::move(init_list))
+    {
+    }
+
+    composite(const self &another)
+    {
+        for (auto &ptr : another.children)
+        {
+            children.emplace_back(value_type(ptr->clone()));
+        }
+    }
+
+    composite(self &&another)
+        : children(std::move(another.children))
     {
     }
 
@@ -740,6 +767,11 @@ public:
     bool is_composite() const override final
     {
         return true;
+    }
+
+    raw_pointer_to_base_interface clone() const override
+    {
+        return new self(*this);
     }
 
 protected:
