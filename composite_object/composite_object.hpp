@@ -846,6 +846,12 @@ public:
         return *this;
     }
 
+    self &operator=(self &&another)
+    {
+        impl = std::move(another.impl);
+        return *this;
+    }
+
     bool operator==(const self &another) const
     {
         if (impl)
@@ -885,14 +891,14 @@ public:
         return *this;
     }
 
-    self operator++(int)
+    self operator++(int) const
     {
         self new_it(*this);
         ++new_it;
         return new_it;
     }
 
-    self operator--(int)
+    self operator--(int) const
     {
         self new_it(*this);
         --new_it;
@@ -941,6 +947,11 @@ public:
     reference operator[](const difference_type offset) const
     {
         return impl->offset(offset);
+    }
+
+    bool empty() const
+    {
+        return impl == nullptr;
     }
 
 protected:
@@ -1030,6 +1041,12 @@ public:
         {
             impl.reset(another.impl->clone());
         }
+        return *this;
+    }
+
+    self &operator=(self &&another)
+    {
+        impl = std::move(another.impl);
         return *this;
     }
 

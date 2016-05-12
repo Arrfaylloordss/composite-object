@@ -151,42 +151,6 @@ namespace unittest
     };
 
 
-    void basic_test()
-    {
-        auto t = std::make_shared<test_class_composite>();
-        {
-            auto t1 = std::make_shared<test_class_composite>(1);
-            auto t2 = std::make_shared<test_class_composite>(2);
-            auto t3 = std::make_shared<test_class_composite>(3);
-
-            auto t_leaf = std::make_shared<test_class_leaf>(1000);
-            t3->cont().push_back(t_leaf);
-
-            t->cont() = { t1, t2, t3 };
-
-            assert(t->size() == 3);
-
-            auto it = composite_object::wrap_iterator(t->cbegin());
-
-            assert(it->get_value() == t1->get_value());
-            assert((it++)->get_value() == t2->get_value());
-            assert((it++++)->get_value() == t3->get_value());
-
-            auto rit = composite_object::wrap_iterator(t->crbegin());
-            assert(rit->get_value() == t3->get_value());
-            assert((rit++)->get_value() == t2->get_value());
-            assert((rit++++)->get_value() == t1->get_value());
-
-            auto t3_it = composite_object::wrap_iterator(t3->cbegin());
-            assert(t3->size() == 1);
-            assert(t3_it->get_value() == t_leaf->get_value());
-        }
-
-        t.reset();
-
-        assert(test_class_composite_base_impl::get_obj_lifetime_stat().is_lifetime_valid());
-    }
-
     void hierarchical_iterators_test()
     {
         auto f = std::make_shared<test_class_composite>(0);
@@ -265,15 +229,40 @@ namespace unittest
     };
 
 
-    struct construction : public test
+    struct construction_and_lifetime : public test
     {
-        const char * name() const override { return "Construction"; }
+        const char * name() const override { return "Construction and lifetime"; }
 
         void run() override
         {
             const int val = 100500;
             auto obj = std::make_shared<test_class_composite>(val);
             assert(obj->get_value() == val);
+
+            test_lifetime();
+        }
+
+    private:
+        void test_lifetime()
+        {
+            test_class_composite_base_impl::reset_obj_lifetime_stat();
+
+            auto t = std::make_shared<test_class_composite>();
+            {
+                auto t1 = std::make_shared<test_class_composite>(1);
+                auto t2 = std::make_shared<test_class_composite>(2);
+                auto t3 = std::make_shared<test_class_composite>(3);
+
+                auto t_leaf = std::make_shared<test_class_leaf>(1000);
+                t3->cont().push_back(t_leaf);
+
+                t->cont() = { t1, t2, t3 };
+                assert(t->size() == 3);
+            }
+
+            t.reset();
+
+            assert(test_class_composite_base_impl::get_obj_lifetime_stat().is_lifetime_valid());
         }
     };
 
@@ -381,129 +370,216 @@ namespace unittest
         }
     };
 
-    struct contruction_of_iterators : public test
+
+    namespace iterators
     {
-        const char * name() const override { return "Construction of iterators"; }
-
-        void run() override
+        struct contruction : public test
         {
-            using composite_type = test_class_composite;
-            using leaf_type = test_class_leaf;
-            auto composite = std::make_shared<composite_type>(0);
-            auto leaf = std::make_shared<leaf_type>(1);
-            composite->cont().push_back(leaf);
+            const char * name() const override { return "Construction of iterators"; }
 
-            // composite
-
+            void run() override
             {
-                composite_type::iterator composite_iterator = composite->begin();
-                decltype(composite_iterator) composite_iterator_end = composite->end();
-                composite_type::const_iterator composite_const_iterator = composite->cbegin();
-                decltype(composite_const_iterator) composite_const_iterator_end = composite->cend();
-                composite_type::reverse_iterator composite_reverse_iterator = composite->rbegin();
-                decltype(composite_reverse_iterator) composite_reverse_iterator_end = composite->rend();
-                composite_type::const_reverse_iterator composite_const_reverse_iterator = composite->crbegin();
-                decltype(composite_const_reverse_iterator) composite_const_reverse_iterator_end = composite->crend();
+                using composite_type = test_class_composite;
+                using leaf_type = test_class_leaf;
+                auto composite = std::make_shared<composite_type>(0);
+                auto leaf = std::make_shared<leaf_type>(1);
+                composite->cont().push_back(leaf);
 
-                assert(composite_iterator++ == composite_iterator_end);
-                assert(composite_reverse_iterator++ == composite_reverse_iterator_end);
+                // composite
+
+                {
+                    composite_type::iterator composite_iterator = composite->begin();
+                    decltype(composite_iterator) composite_iterator_end = composite->end();
+                    composite_type::const_iterator composite_const_iterator = composite->cbegin();
+                    decltype(composite_const_iterator) composite_const_iterator_end = composite->cend();
+                    composite_type::reverse_iterator composite_reverse_iterator = composite->rbegin();
+                    decltype(composite_reverse_iterator) composite_reverse_iterator_end = composite->rend();
+                    composite_type::const_reverse_iterator composite_const_reverse_iterator = composite->crbegin();
+                    decltype(composite_const_reverse_iterator) composite_const_reverse_iterator_end = composite->crend();
+
+                    assert(composite_iterator++ == composite_iterator_end);
+                    assert(composite_reverse_iterator++ == composite_reverse_iterator_end);
+                }
+
+                {
+                    composite_type::df_pre_order_hierarchical_iterator composite_iterator = composite->df_pre_order_begin();
+                    decltype(composite_iterator) composite_iterator_end = composite->df_pre_order_end();
+                    composite_type::const_df_pre_order_hierarchical_iterator composite_const_iterator = composite->cdf_pre_order_begin();
+                    decltype(composite_const_iterator) composite_const_iterator_end = composite->cdf_pre_order_end();
+                    composite_type::reverse_df_pre_order_hierarchical_iterator composite_reverse_iterator = composite->rdf_pre_order_begin();
+                    decltype(composite_reverse_iterator) composite_reverse_iterator_end = composite->rdf_pre_order_end();
+                    composite_type::const_reverse_df_pre_order_hierarchical_iterator composite_const_reverse_iterator = composite->crdf_pre_order_begin();
+                    decltype(composite_const_reverse_iterator) composite_const_reverse_iterator_end = composite->crdf_pre_order_end();
+
+                    assert(composite_iterator++ == composite_iterator_end);
+                    assert(composite_reverse_iterator++ == composite_reverse_iterator_end);
+                }
+
+                {
+                    composite_type::df_post_order_hierarchical_iterator composite_iterator = composite->df_post_order_begin();
+                    decltype(composite_iterator) composite_iterator_end = composite->df_post_order_end();
+                    composite_type::const_df_post_order_hierarchical_iterator composite_const_iterator = composite->cdf_post_order_begin();
+                    decltype(composite_const_iterator) composite_const_iterator_end = composite->cdf_post_order_end();
+                    composite_type::reverse_df_post_order_hierarchical_iterator composite_reverse_iterator = composite->rdf_post_order_begin();
+                    decltype(composite_reverse_iterator) composite_reverse_iterator_end = composite->rdf_post_order_end();
+                    composite_type::const_reverse_df_post_order_hierarchical_iterator composite_const_reverse_iterator = composite->crdf_post_order_begin();
+                    decltype(composite_const_reverse_iterator) composite_const_reverse_iterator_end = composite->crdf_post_order_end();
+
+                    assert(composite_iterator++ == composite_iterator_end);
+                    assert(composite_reverse_iterator++ == composite_reverse_iterator_end);
+                }
+
+                {
+                    composite_type::bf_hierarchical_iterator composite_iterator = composite->bf_begin();
+                    decltype(composite_iterator) composite_iterator_end = composite->bf_end();
+                    composite_type::const_bf_hierarchical_iterator composite_const_iterator = composite->cbf_begin();
+                    decltype(composite_const_iterator) composite_const_iterator_end = composite->cbf_end();
+                    composite_type::reverse_bf_hierarchical_iterator composite_reverse_iterator = composite->rbf_begin();
+                    decltype(composite_reverse_iterator) composite_reverse_iterator_end = composite->rbf_end();
+                    composite_type::const_reverse_bf_hierarchical_iterator composite_const_reverse_iterator = composite->crbf_begin();
+                    decltype(composite_const_reverse_iterator) composite_const_reverse_iterator_end = composite->crbf_end();
+
+                    assert(composite_iterator++ == composite_iterator_end);
+                    assert(composite_reverse_iterator++ == composite_reverse_iterator_end);
+                }
+
+                // leaf
+
+                {
+                    leaf_type::iterator leaf_iterator = leaf->begin();
+                    decltype(leaf_iterator) leaf_iterator_end = leaf->end();
+                    leaf_type::const_iterator leaf_const_iterator = leaf->cbegin();
+                    decltype(leaf_const_iterator) leaf_const_iterator_end = leaf->cend();
+                    leaf_type::reverse_iterator leaf_reverse_iterator = leaf->rbegin();
+                    decltype(leaf_reverse_iterator) leaf_reverse_iterator_end = leaf->rend();
+                    leaf_type::const_reverse_iterator leaf_const_reverse_iterator = leaf->crbegin();
+                    decltype(leaf_const_reverse_iterator) leaf_const_reverse_iterator_end = leaf->crend();
+                }
+
+                {
+                    leaf_type::df_pre_order_hierarchical_iterator leaf_iterator = leaf->df_pre_order_begin();
+                    decltype(leaf_iterator) leaf_iterator_end = leaf->df_pre_order_end();
+                    leaf_type::const_df_pre_order_hierarchical_iterator leaf_const_iterator = leaf->cdf_pre_order_begin();
+                    decltype(leaf_const_iterator) leaf_const_iterator_end = leaf->cdf_pre_order_end();
+                    leaf_type::reverse_df_pre_order_hierarchical_iterator leaf_reverse_iterator = leaf->rdf_pre_order_begin();
+                    decltype(leaf_reverse_iterator) leaf_reverse_iterator_end = leaf->rdf_pre_order_end();
+                    leaf_type::const_reverse_df_pre_order_hierarchical_iterator leaf_const_reverse_iterator = leaf->crdf_pre_order_begin();
+                    decltype(leaf_const_reverse_iterator) leaf_const_reverse_iterator_end = leaf->crdf_pre_order_end();
+                }
+
+                {
+                    leaf_type::df_post_order_hierarchical_iterator leaf_iterator = leaf->df_post_order_begin();
+                    decltype(leaf_iterator) leaf_iterator_end = leaf->df_post_order_end();
+                    leaf_type::const_df_post_order_hierarchical_iterator leaf_const_iterator = leaf->cdf_post_order_begin();
+                    decltype(leaf_const_iterator) leaf_const_iterator_end = leaf->cdf_post_order_end();
+                    leaf_type::reverse_df_post_order_hierarchical_iterator leaf_reverse_iterator = leaf->rdf_post_order_begin();
+                    decltype(leaf_reverse_iterator) leaf_reverse_iterator_end = leaf->rdf_post_order_end();
+                    leaf_type::const_reverse_df_post_order_hierarchical_iterator leaf_const_reverse_iterator = leaf->crdf_post_order_begin();
+                    decltype(leaf_const_reverse_iterator) leaf_const_reverse_iterator_end = leaf->crdf_post_order_end();
+                }
+
+                {
+                    leaf_type::bf_hierarchical_iterator leaf_iterator = leaf->bf_begin();
+                    decltype(leaf_iterator) leaf_iterator_end = leaf->bf_end();
+                    leaf_type::const_bf_hierarchical_iterator leaf_const_iterator = leaf->cbf_begin();
+                    decltype(leaf_const_iterator) leaf_const_iterator_end = leaf->cbf_end();
+                    leaf_type::reverse_bf_hierarchical_iterator leaf_reverse_iterator = leaf->rbf_begin();
+                    decltype(leaf_reverse_iterator) leaf_reverse_iterator_end = leaf->rbf_end();
+                    leaf_type::const_reverse_bf_hierarchical_iterator leaf_const_reverse_iterator = leaf->crbf_begin();
+                    decltype(leaf_const_reverse_iterator) leaf_const_reverse_iterator_end = leaf->crbf_end();
+                }
             }
+        };
 
+
+        struct hierarchy_basic_setup
+        {
+            hierarchy_basic_setup()
             {
-                composite_type::df_pre_order_hierarchical_iterator composite_iterator = composite->df_pre_order_begin();
-                decltype(composite_iterator) composite_iterator_end = composite->df_pre_order_end();
-                composite_type::const_df_pre_order_hierarchical_iterator composite_const_iterator = composite->cdf_pre_order_begin();
-                decltype(composite_const_iterator) composite_const_iterator_end = composite->cdf_pre_order_end();
-                composite_type::reverse_df_pre_order_hierarchical_iterator composite_reverse_iterator = composite->rdf_pre_order_begin();
-                decltype(composite_reverse_iterator) composite_reverse_iterator_end = composite->rdf_pre_order_end();
-                composite_type::const_reverse_df_pre_order_hierarchical_iterator composite_const_reverse_iterator = composite->crdf_pre_order_begin();
-                decltype(composite_const_reverse_iterator) composite_const_reverse_iterator_end = composite->crdf_pre_order_end();
+                auto f = std::make_shared<test_class_composite>(0);
 
-                assert(composite_iterator++ == composite_iterator_end);
-                assert(composite_reverse_iterator++ == composite_reverse_iterator_end);
+                auto a = std::make_shared<test_class_composite>(1);
+                auto b = std::make_shared<test_class_composite>(2);
+                auto c = std::make_shared<test_class_composite>(3);
+                auto d = std::make_shared<test_class_composite>(4);
+                auto e = std::make_shared<test_class_composite>(5);
+                auto g = std::make_shared<test_class_composite>(6);
+                auto i = std::make_shared<test_class_composite>(7);
+                auto h = std::make_shared<test_class_leaf>(8);
+
+                f->cont() = { b, g };
+                b->cont() = { a, d };
+                d->cont() = { c, e };
+                g->cont().push_back(i);
+                i->cont().push_back(h);
             }
+        };
 
+        struct iterator : public test, public basic_test_setup
+        {
+            const char * name() const override { return "Iterators - iterator"; }
+
+            void run() override
             {
-                composite_type::df_post_order_hierarchical_iterator composite_iterator = composite->df_post_order_begin();
-                decltype(composite_iterator) composite_iterator_end = composite->df_post_order_end();
-                composite_type::const_df_post_order_hierarchical_iterator composite_const_iterator = composite->cdf_post_order_begin();
-                decltype(composite_const_iterator) composite_const_iterator_end = composite->cdf_post_order_end();
-                composite_type::reverse_df_post_order_hierarchical_iterator composite_reverse_iterator = composite->rdf_post_order_begin();
-                decltype(composite_reverse_iterator) composite_reverse_iterator_end = composite->rdf_post_order_end();
-                composite_type::const_reverse_df_post_order_hierarchical_iterator composite_const_reverse_iterator = composite->crdf_post_order_begin();
-                decltype(composite_const_reverse_iterator) composite_const_reverse_iterator_end = composite->crdf_post_order_end();
+                {
+                    test_class_composite_interface::iterator it = obj.begin();
+                    unsigned int k = 0;
+                    for (it; it != obj.end(); ++it)
+                    {
+                        ++k;
+                    }
 
-                assert(composite_iterator++ == composite_iterator_end);
-                assert(composite_reverse_iterator++ == composite_reverse_iterator_end);
+                    assert(k == obj.size());
+                }
+
+                const auto it = obj.begin();
+
+                // copy assignment
+                test_class_composite_interface::iterator it_copy;
+                it_copy = it;
+                assert((*it_copy)->get_value() == (*it)->get_value());
+                assert((*it_copy)->get_value() == leaf_a->get_value());
+                assert((*it++)->get_value() == leaf_b->get_value());
+                assert((*it_copy)->get_value() == leaf_a->get_value());
+
+                // move assigment
+                test_class_composite_interface::iterator it_moved;
+                it_moved = std::move(it_copy);
+                assert(it_copy.empty());
+                assert((*it_moved)->get_value() == leaf_a->get_value());
+
+                // equality
+                auto it_equal = it;
+                assert(it_equal == it);
+                ++it_equal;
+                assert(it_equal != it);
+                it_equal = obj.end();
+                assert(it_equal == obj.end());
+
+                // dereferencing
+                test_class_composite_interface::value_type &leaf_a_ref = *it;
+                assert(leaf_a_ref->get_value() == leaf_a->get_value());
+                assert(it->operator->()->get_value() == leaf_a->get_value());
+
+                // increment/decrement
+                auto incremented_it = ++obj.begin();
+                assert((*incremented_it)->get_value() == leaf_b->get_value());
+                ++incremented_it;
+                assert((*incremented_it)->get_value() == composite_c->get_value());
+                auto decremented_it = incremented_it--;
+                assert((*incremented_it)->get_value() == composite_c->get_value());
+                assert(++incremented_it == obj.end());
+                assert((*decremented_it)->get_value() == leaf_b->get_value());
+                assert((*--decremented_it)->get_value() == leaf_a->get_value());
             }
-
-            {
-                composite_type::bf_hierarchical_iterator composite_iterator = composite->bf_begin();
-                decltype(composite_iterator) composite_iterator_end = composite->bf_end();
-                composite_type::const_bf_hierarchical_iterator composite_const_iterator = composite->cbf_begin();
-                decltype(composite_const_iterator) composite_const_iterator_end = composite->cbf_end();
-                composite_type::reverse_bf_hierarchical_iterator composite_reverse_iterator = composite->rbf_begin();
-                decltype(composite_reverse_iterator) composite_reverse_iterator_end = composite->rbf_end();
-                composite_type::const_reverse_bf_hierarchical_iterator composite_const_reverse_iterator = composite->crbf_begin();
-                decltype(composite_const_reverse_iterator) composite_const_reverse_iterator_end = composite->crbf_end();
-
-                assert(composite_iterator++ == composite_iterator_end);
-                assert(composite_reverse_iterator++ == composite_reverse_iterator_end);
-            }
-
-            // leaf
-
-            {
-                leaf_type::iterator leaf_iterator = leaf->begin();
-                decltype(leaf_iterator) leaf_iterator_end = leaf->end();
-                leaf_type::const_iterator leaf_const_iterator = leaf->cbegin();
-                decltype(leaf_const_iterator) leaf_const_iterator_end = leaf->cend();
-                leaf_type::reverse_iterator leaf_reverse_iterator = leaf->rbegin();
-                decltype(leaf_reverse_iterator) leaf_reverse_iterator_end = leaf->rend();
-                leaf_type::const_reverse_iterator leaf_const_reverse_iterator = leaf->crbegin();
-                decltype(leaf_const_reverse_iterator) leaf_const_reverse_iterator_end = leaf->crend();
-            }
-
-            {
-                leaf_type::df_pre_order_hierarchical_iterator leaf_iterator = leaf->df_pre_order_begin();
-                decltype(leaf_iterator) leaf_iterator_end = leaf->df_pre_order_end();
-                leaf_type::const_df_pre_order_hierarchical_iterator leaf_const_iterator = leaf->cdf_pre_order_begin();
-                decltype(leaf_const_iterator) leaf_const_iterator_end = leaf->cdf_pre_order_end();
-                leaf_type::reverse_df_pre_order_hierarchical_iterator leaf_reverse_iterator = leaf->rdf_pre_order_begin();
-                decltype(leaf_reverse_iterator) leaf_reverse_iterator_end = leaf->rdf_pre_order_end();
-                leaf_type::const_reverse_df_pre_order_hierarchical_iterator leaf_const_reverse_iterator = leaf->crdf_pre_order_begin();
-                decltype(leaf_const_reverse_iterator) leaf_const_reverse_iterator_end = leaf->crdf_pre_order_end();
-            }
-
-            {
-                leaf_type::df_post_order_hierarchical_iterator leaf_iterator = leaf->df_post_order_begin();
-                decltype(leaf_iterator) leaf_iterator_end = leaf->df_post_order_end();
-                leaf_type::const_df_post_order_hierarchical_iterator leaf_const_iterator = leaf->cdf_post_order_begin();
-                decltype(leaf_const_iterator) leaf_const_iterator_end = leaf->cdf_post_order_end();
-                leaf_type::reverse_df_post_order_hierarchical_iterator leaf_reverse_iterator = leaf->rdf_post_order_begin();
-                decltype(leaf_reverse_iterator) leaf_reverse_iterator_end = leaf->rdf_post_order_end();
-                leaf_type::const_reverse_df_post_order_hierarchical_iterator leaf_const_reverse_iterator = leaf->crdf_post_order_begin();
-                decltype(leaf_const_reverse_iterator) leaf_const_reverse_iterator_end = leaf->crdf_post_order_end();
-            }
-
-            {
-                leaf_type::bf_hierarchical_iterator leaf_iterator = leaf->bf_begin();
-                decltype(leaf_iterator) leaf_iterator_end = leaf->bf_end();
-                leaf_type::const_bf_hierarchical_iterator leaf_const_iterator = leaf->cbf_begin();
-                decltype(leaf_const_iterator) leaf_const_iterator_end = leaf->cbf_end();
-                leaf_type::reverse_bf_hierarchical_iterator leaf_reverse_iterator = leaf->rbf_begin();
-                decltype(leaf_reverse_iterator) leaf_reverse_iterator_end = leaf->rbf_end();
-                leaf_type::const_reverse_bf_hierarchical_iterator leaf_const_reverse_iterator = leaf->crbf_begin();
-                decltype(leaf_const_reverse_iterator) leaf_const_reverse_iterator_end = leaf->crbf_end();
-            }
-        }
-    };
-
+        };
+    }
+    
 
     void run()
     {
         std::vector<std::unique_ptr<test>> tests;
-        tests.emplace_back(std::make_unique<construction>());
+        tests.emplace_back(std::make_unique<construction_and_lifetime>());
         tests.emplace_back(std::make_unique<copy_construction>());
         tests.emplace_back(std::make_unique<move_construction>());
         tests.emplace_back(std::make_unique<is_leaf_function>());
@@ -511,7 +587,9 @@ namespace unittest
         tests.emplace_back(std::make_unique<clear_function>());
         tests.emplace_back(std::make_unique<size_function>());
         tests.emplace_back(std::make_unique<nested_hierarchy_size_function>());
-        tests.emplace_back(std::make_unique<contruction_of_iterators>());
+
+        tests.emplace_back(std::make_unique<iterators::contruction>());
+        tests.emplace_back(std::make_unique<iterators::iterator>());
 
         std::cout << "Test 'composite_object'..." << std::endl;
 
@@ -522,9 +600,6 @@ namespace unittest
             std::cout << "Ok." << std::endl;
         }
 
-        //basic_test();
-        //iterators_construction_test();
-        //hierarchical_iterators_test();
         std::cout << "Ok." << std::endl;
     }
 
