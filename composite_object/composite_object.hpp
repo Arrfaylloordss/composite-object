@@ -157,6 +157,8 @@ public:
         bf_hierarchical_iterator_template<const_reverse_iterator, true>;
 
 public:
+    virtual void push_back(const value_type &) = 0;
+    virtual void push_back(value_type &&) = 0;
     virtual bool is_leaf() const = 0;
     virtual bool is_composite() const = 0;
     virtual void clear() = 0;
@@ -418,6 +420,16 @@ public:
     {
     }
 
+    void push_back(const value_type &another) override
+    {
+
+    }
+
+    void push_back(value_type &&another) override
+    {
+
+    }
+
     iterator begin() override
     {
         return end();
@@ -494,10 +506,12 @@ class composite : public interface_plug_in<Base>
 {  
     using self = composite;
     using parent = interface_plug_in<Base>;
+
 public:
     using container_type = Container<value_type>;
     using initializer_list = std::initializer_list<value_type>;
 
+public:
     template <class IteratorTag, class Iterator>
     struct iterator_impl_specific
     {
@@ -696,6 +710,16 @@ public:
         return children;
     }
 
+    void push_back(const value_type &another) override
+    {
+        children.push_back(another);
+    }
+
+    void push_back(value_type &&another) override
+    {
+        children.push_back(std::move(another));
+    }
+
     // linear iterators
 
     iterator begin() override
@@ -791,6 +815,7 @@ class polymorphic_iterator_template : public std::iterator<Category, T, Distance
 {
     using self = polymorphic_iterator_template;
 public:
+    const static bool is_reversed = reversed;
 
     class common_implementation
     {
@@ -1061,57 +1086,56 @@ public:
 };
 
 
-namespace
+
+template <class Container>
+struct begin
 {
-    template <class Container>
-    struct begin
+    void operator()(Container &cont, typename Container::iterator &out)
     {
-        void operator()(Container &cont, typename Container::iterator &out)
-        {
-            out = cont.begin();
-        }
+        out = cont.begin();
+    }
 
-        void operator()(const Container &cont, typename Container::const_iterator &out)
-        {
-            out = cont.cbegin();
-        }
-
-        void operator()(Container &cont, typename Container::reverse_iterator &out)
-        {
-            out = cont.rbegin();
-        }
-
-        void operator()(const Container &cont, typename Container::const_reverse_iterator &out)
-        {
-            out = cont.crbegin();
-        }
-    };
-
-
-    template <class Container>
-    struct end
+    void operator()(const Container &cont, typename Container::const_iterator &out)
     {
-        void operator()(Container &cont, typename Container::iterator &out)
-        {
-            out = cont.end();
-        }
+        out = cont.cbegin();
+    }
 
-        void operator()(const Container &cont, typename Container::const_iterator &out)
-        {
-            out = cont.cend();
-        }
+    void operator()(Container &cont, typename Container::reverse_iterator &out)
+    {
+        out = cont.rbegin();
+    }
 
-        void operator()(Container &cont, typename Container::reverse_iterator &out)
-        {
-            out = cont.rend();
-        }
+    void operator()(const Container &cont, typename Container::const_reverse_iterator &out)
+    {
+        out = cont.crbegin();
+    }
+};
 
-        void operator()(const Container &cont, typename Container::const_reverse_iterator &out)
-        {
-            out = cont.crend();
-        }
-    };
-}
+
+template <class Container>
+struct end
+{
+    void operator()(Container &cont, typename Container::iterator &out)
+    {
+        out = cont.end();
+    }
+
+    void operator()(const Container &cont, typename Container::const_iterator &out)
+    {
+        out = cont.cend();
+    }
+
+    void operator()(Container &cont, typename Container::reverse_iterator &out)
+    {
+        out = cont.rend();
+    }
+
+    void operator()(const Container &cont, typename Container::const_reverse_iterator &out)
+    {
+        out = cont.crend();
+    }
+};
+
 
 
 template <class Source, class Dest>
@@ -1174,12 +1198,34 @@ public:
     {
     }
 
+    df_hierarchical_iterator_template(self &&another) :
+        iters(std::move(another.iters))
+    {
+    }
+
+    self &operator=(const self &another)
+    {
+        iters = another.iters;
+        return *this;
+    }
+
+    self &operator=(self &&another)
+    {
+        iters = std::move(another.iters);
+        return *this;
+    }
+
     bool operator==(const self &another) const
     {
         return iters.size() == another.iters.size() &&
             std::equal(iters.crbegin(), iters.crend(), another.iters.crbegin(),
                 [](const auto &a, const auto &b) {return a.current == b.current; }
         );
+    }
+
+    bool empty() const
+    {
+        return iters.empty();
     }
 
     bool operator!=(const self &another) const
@@ -1281,7 +1327,7 @@ private:
         return iters.back();
     }
 
-    bool can_go_down()
+    bool can_go_down() const
     {
         return (*top_it())->size() > 0;
     }
@@ -1370,19 +1416,35 @@ class bf_hierarchical_iterator_template :
     using queue_container_type = std::queue<node_iters>;
 
 public:
-    bf_hierarchical_iterator_template() : level(0)
+    bf_hierarchical_iterator_template()
     {
     }
 
     explicit bf_hierarchical_iterator_template(const LinearIterator &root_begin, const LinearIterator &root_end)
-        : level(0)
     {
         push(node_iters{ root_begin, root_end});
     }
 
     bf_hierarchical_iterator_template(const self &another) :
-        iters(another.iters), level(another.level)
+        iters(another.iters)
     {
+    }
+
+    bf_hierarchical_iterator_template(self &&another) :
+        iters(std::move(another.iters))
+    {
+    }
+
+    self &operator=(const self &another)
+    {
+        iters = another.iters;
+        return *this;
+    }
+
+    self &operator=(self &&another)
+    {
+        iters = std::move(another.iters);
+        return *this;
     }
 
     bool operator==(const self &another) const
@@ -1436,6 +1498,11 @@ public:
         self new_it(*this);
         ++new_it;
         return new_it;
+    }
+
+    bool empty() const
+    {
+        return iters.empty();
     }
 
 private:
@@ -1498,7 +1565,6 @@ private:
     }
 
 private:
-    size_t level;
     queue_container_type iters;
 };
 
