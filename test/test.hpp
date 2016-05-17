@@ -250,6 +250,27 @@ namespace unittest
         }
     };
 
+    struct push_back_function : public test, public basic_test_setup
+    {
+        const char * name() const override { return "`push_back()` function"; }
+
+        void run() override
+        {
+            auto new_element = std::make_shared<test_class_composite>(25);
+            const size_t size = obj.size();
+            const size_t hsize = obj.nested_hierarchy_size();
+            obj.push_back(new_element);
+            assert(obj.size() == (size + 1));
+            assert(obj.nested_hierarchy_size() == (hsize + 1));
+
+            // moving
+            auto new_element2 = std::make_shared<test_class_composite>(32);
+            obj.push_back(std::move(new_element2));
+            assert(!new_element2);
+            assert(obj.size() == (size + 2));
+        }
+    };
+
     struct is_leaf_function : public test, public basic_test_setup
     {
         const char * name() const override { return "`is_leaf()` function"; }
@@ -1106,6 +1127,7 @@ namespace unittest
         tests.emplace_back(new construction_and_lifetime());
         tests.emplace_back(new copy_construction());
         tests.emplace_back(new move_construction());
+        tests.emplace_back(new push_back_function());
         tests.emplace_back(new is_leaf_function());
         tests.emplace_back(new is_composite_function());
         tests.emplace_back(new clear_function());

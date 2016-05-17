@@ -159,11 +159,12 @@ public:
 public:
     virtual void push_back(const value_type &) = 0;
     virtual void push_back(value_type &&) = 0;
-    virtual bool is_leaf() const = 0;
-    virtual bool is_composite() const = 0;
-    virtual void clear() = 0;
-    virtual size_t size() const = 0;
-    virtual size_t nested_hierarchy_size() const = 0;
+    virtual bool is_leaf() const noexcept = 0;
+    virtual bool is_composite() const noexcept = 0;
+    virtual void clear() noexcept = 0;
+    virtual size_t size() const noexcept = 0;
+    virtual bool empty() const noexcept = 0;
+    virtual size_t nested_hierarchy_size() const noexcept = 0;
     virtual raw_pointer_to_base_interface clone() const = 0;
 
     virtual iterator begin() = 0;
@@ -470,26 +471,31 @@ public:
         return const_reverse_iterator(std::make_unique<leaf_iterator_impl<const_reverse_iterator>>());
     }
 
-    void clear() override
+    void clear() noexcept override
     {
     }
 
-    size_t size() const override final
-    {
-        return 0;
-    }
-
-    size_t nested_hierarchy_size() const override final
+    size_t size() const noexcept override final
     {
         return 0;
     }
 
-    bool is_leaf() const override final
+    bool empty() const noexcept override final
     {
         return true;
     }
 
-    bool is_composite() const override final
+    size_t nested_hierarchy_size() const noexcept override final
+    {
+        return 0;
+    }
+
+    bool is_leaf() const noexcept override final
+    {
+        return true;
+    }
+
+    bool is_composite() const noexcept override final
     {
         return false;
     }
@@ -762,17 +768,22 @@ public:
         return const_reverse_iterator(std::make_unique<const_reverse_iterator_impl>(children.crend()));
     }
 
-    void clear() override
+    void clear() noexcept override
     {
         children.clear();
     }
 
-    size_t size() const override
+    size_t size() const noexcept override
     {
         return children.size();
     }
 
-    size_t nested_hierarchy_size() const override final
+    bool empty() const noexcept override final
+    {
+        return children.empty();
+    }
+
+    size_t nested_hierarchy_size() const noexcept override final
     {
         size_t count = size();
         for (auto it = cbegin(); it != cend(); ++it)
@@ -783,12 +794,12 @@ public:
         return count;
     }
 
-    bool is_leaf() const override final
+    bool is_leaf() const noexcept override final
     {
         return false;
     }
 
-    bool is_composite() const override final
+    bool is_composite() const noexcept override final
     {
         return true;
     }
