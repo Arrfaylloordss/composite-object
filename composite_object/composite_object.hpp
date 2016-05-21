@@ -19,25 +19,60 @@
 #include <initializer_list>
 #include <functional>
 
+#ifdef _MSC_VER
+    #pragma warning( disable : 4503)
+#endif
+
 
 namespace composite_object
 {
 
+template <class T>
+struct default_pointer_model
+{
+    using type = std::unique_ptr<T, std::default_delete<T>>;
+};
+
+
+template <class T>
+struct shared_pointer_model
+{
+    using type = std::shared_ptr<T>;
+};
+
+
 template
     <
     class Base,
+    template <class T> class PointerModel = default_pointer_model,
     class BaseIteratorCategory = std::bidirectional_iterator_tag
     >
-class abstract;
+    class abstract;
 
-template <class Base> class leaf;
+
+template <class Base>
+    class leaf;
+
 
 template
     <
     class Base,
     template <class T, class Alloc = std::allocator<T>> class Container = std::list
     >
-class composite;
+    class composite;
+
+
+template <class Base>
+    class null_reference;
+
+
+template
+    <
+    class Base,
+    class NullReference = null_reference<Base>
+    >
+    class reference;
+
 
 template
     <
@@ -48,7 +83,8 @@ template
     class Reference = T&,
     bool reversed = false
     >
-class polymorphic_iterator_template;
+    class polymorphic_iterator_template;
+
 
 enum class df_traverse_algorithm
 {
@@ -56,33 +92,45 @@ enum class df_traverse_algorithm
     post_order
 };
 
+
 template
     <
     class LinearIterator,
     const df_traverse_algorithm traverse_algorithm_param,
     bool reversed = false
     >
-class df_hierarchical_iterator_template;
+    class df_hierarchical_iterator_template;
+
 
 template <class LinearIterator, bool reversed = false>
-class bf_hierarchical_iterator_template;
+    class bf_hierarchical_iterator_template;
 
 //
 
-template <class Base, class BaseIteratorCategory>
+template
+<
+    class Base,
+    template <class T> class PointerModel,
+    class BaseIteratorCategory
+>
 class abstract : public Base
 {
     using self = abstract;
 
 public:
-    using value_type = std::shared_ptr<self>;
+    using smart_ptr = typename PointerModel<self>::type;
+    using value_type = smart_ptr;
+
+    template <class NullReference = null_reference<self>>
+        using reference = composite_object::reference<self, NullReference>;
+
     using raw_pointer_to_base_interface = self*;
 
     struct iterator_traits
     {
         using iterator_category    = BaseIteratorCategory;
-        using value_type           = std::shared_ptr<self>;
-        using const_value_type     = const std::shared_ptr<self>;
+        using value_type           = value_type;
+        using const_value_type     = const value_type;
         using reference            = value_type&;
         using const_reference      = const_value_type&;
         using raw_pointer          = self*;
@@ -159,12 +207,14 @@ public:
 public:
     virtual void push_back(const value_type &) = 0;
     virtual void push_back(value_type &&) = 0;
-    virtual bool is_leaf() const noexcept = 0;
-    virtual bool is_composite() const noexcept = 0;
-    virtual void clear() noexcept = 0;
-    virtual size_t size() const noexcept = 0;
-    virtual bool empty() const noexcept = 0;
-    virtual size_t nested_hierarchy_size() const noexcept = 0;
+    virtual bool is_leaf() const = 0;
+    virtual bool is_composite() const = 0;
+    virtual bool is_reference() const = 0;
+    virtual bool is_traversable() const noexcept = 0;
+    virtual void clear() = 0;
+    virtual size_t size() const = 0;
+    virtual bool empty() const = 0;
+    virtual size_t nested_hierarchy_size() const = 0;
     virtual raw_pointer_to_base_interface clone() const = 0;
 
     virtual iterator begin() = 0;
@@ -300,6 +350,10 @@ public:
     auto crbf_end() const
     {
         return const_reverse_bf_hierarchical_iterator();
+    }
+
+    virtual ~abstract() noexcept
+    {
     }
 };
 
@@ -471,33 +525,43 @@ public:
         return const_reverse_iterator(std::make_unique<leaf_iterator_impl<const_reverse_iterator>>());
     }
 
-    void clear() noexcept override
+    void clear() override
     {
     }
 
-    size_t size() const noexcept override final
-    {
-        return 0;
-    }
-
-    bool empty() const noexcept override final
-    {
-        return true;
-    }
-
-    size_t nested_hierarchy_size() const noexcept override final
+    size_t size() const override final
     {
         return 0;
     }
 
-    bool is_leaf() const noexcept override final
+    bool empty() const override final
     {
         return true;
     }
 
-    bool is_composite() const noexcept override final
+    size_t nested_hierarchy_size() const override final
+    {
+        return 0;
+    }
+
+    bool is_leaf() const override final
+    {
+        return true;
+    }
+
+    bool is_composite() const override final
     {
         return false;
+    }
+
+    bool is_reference() const override final
+    {
+        return false;
+    }
+
+    bool is_traversable() const noexcept override final
+    {
+        return true;
     }
 
     raw_pointer_to_base_interface clone() const override
@@ -718,7 +782,7 @@ public:
 
     void push_back(const value_type &another) override
     {
-        children.push_back(another);
+        push_back_impl<std::is_copy_constructible<value_type>::value>(another);
     }
 
     void push_back(value_type &&another) override
@@ -768,22 +832,22 @@ public:
         return const_reverse_iterator(std::make_unique<const_reverse_iterator_impl>(children.crend()));
     }
 
-    void clear() noexcept override
+    void clear() override
     {
         children.clear();
     }
 
-    size_t size() const noexcept override
+    size_t size() const override
     {
         return children.size();
     }
 
-    bool empty() const noexcept override final
+    bool empty() const override final
     {
         return children.empty();
     }
 
-    size_t nested_hierarchy_size() const noexcept override final
+    size_t nested_hierarchy_size() const override final
     {
         size_t count = size();
         for (auto it = cbegin(); it != cend(); ++it)
@@ -794,12 +858,22 @@ public:
         return count;
     }
 
-    bool is_leaf() const noexcept override final
+    bool is_leaf() const override final
     {
         return false;
     }
 
-    bool is_composite() const noexcept override final
+    bool is_composite() const override final
+    {
+        return true;
+    }
+
+    bool is_reference() const override final
+    {
+        return false;
+    }
+
+    bool is_traversable() const noexcept override final
     {
         return true;
     }
@@ -809,8 +883,365 @@ public:
         return new self(*this);
     }
 
+private:
+    template <bool is_copy_constructible>
+    void push_back_impl(const value_type &val)
+    {
+        children.push_back(val);
+    }
+
+    template<>
+    void push_back_impl<false>(const value_type &val)
+    {
+    }
+
 protected:
     container_type children;
+};
+
+
+
+template <class Base, class NullReference>
+class reference : public Base
+{
+    using self = reference;
+
+public:
+    using smart_ptr = typename Base::smart_ptr;
+    using value_type = typename Base::value_type;
+    using raw_pointer_to_base_interface = typename Base::raw_pointer_to_base_interface;
+
+    using iterator = typename Base::iterator;
+    using const_iterator = typename Base::const_iterator;
+    using reverse_iterator = typename Base::reverse_iterator;
+    using const_reverse_iterator = typename Base::const_reverse_iterator;
+
+    using null_reference_type = NullReference;
+
+public:
+    reference()
+    {
+        reset();
+    }
+
+    explicit reference(const smart_ptr &source)
+    {
+        if (!source->is_reference())
+        {
+            ptr = source.get();
+        }
+        else
+        {
+            self *ref_obj = static_cast<self*>(source.get());
+            if (!ref_obj->is_null())
+            {
+                ptr = ref_obj->ptr;
+                _traversable = ref_obj->_traversable;
+            }
+        }
+    }
+
+    reference(const self &another)
+    {
+        if (!another.is_null())
+        {
+            ptr = another.ptr;
+            _traversable = another._traversable;
+        }
+    }
+
+    reference(self &&another)
+    {
+        if (!another.is_null())
+        {
+            ptr = another.ptr;
+            _traversable = another._traversable;
+            another.reset();
+        }
+    }
+
+    self &operator=(const smart_ptr &source)
+    {
+        if (!source->is_reference())
+        {
+            ptr = source.get();
+        }
+        else
+        {
+            self *ref_obj = (self*)(source.get());
+            if (!ref_obj->is_null())
+            {
+                ptr = ref_obj->ptr;
+                _traversable = ref_obj->_traversable;
+            }
+        }
+
+        return *this;
+    }
+
+    self &operator=(const self &another)
+    {
+        if (!another.is_null())
+        {
+            ptr = another.ptr;
+            _traversable = another._traversable;
+        }
+        else
+        {
+            reset();
+        }
+
+        return *this;
+    }
+
+    self &operator=(self &&another)
+    {
+        if (!another.is_null())
+        {
+            ptr = another.ptr;
+            _traversable = another._traversable;
+            another.reset();
+        }
+        else
+        {
+            reset();
+        }
+
+        return *this;
+    }
+
+    void push_back(const value_type &another) override
+    {
+        ptr->push_back(another);
+    }
+
+    void push_back(value_type &&another) override
+    {
+        ptr->push_back(std::move(another));
+    }
+
+    iterator begin() override
+    {
+        return ptr->begin();
+    }
+
+    iterator end() override
+    {
+        return ptr->end();
+    }
+
+    reverse_iterator rbegin() override
+    {
+        return ptr->rbegin();
+    }
+
+    reverse_iterator rend() override
+    {
+        return ptr->rend();
+    }
+
+    const_iterator cbegin() const override
+    {
+        return ptr->cbegin();
+    }
+
+    const_iterator cend() const override
+    {
+        return ptr->cend();
+    }
+
+    const_reverse_iterator crbegin() const override
+    {
+        return ptr->crbegin();
+    }
+
+    const_reverse_iterator crend() const override
+    {
+        return ptr->crend();
+    }
+
+    void clear() override
+    {
+        ptr->clear();
+    }
+
+    size_t size() const override final
+    {
+        return is_traversable() ? ptr->size() : 0;
+    }
+
+    bool empty() const override final
+    {
+        return ptr->empty();
+    }
+
+    size_t nested_hierarchy_size() const override final
+    {
+        return is_traversable() ? ptr->nested_hierarchy_size() : 0;
+    }
+
+    bool is_leaf() const override final
+    {
+        return ptr->is_leaf();
+    }
+
+    bool is_composite() const override final
+    {
+        return ptr->is_composite();
+    }
+
+    bool is_reference() const override final
+    {
+        return true;
+    }
+
+    bool is_traversable() const noexcept override final
+    {
+        return _traversable;
+    }
+
+    void reset()
+    {
+        ptr = null_ptr.get();
+    }
+
+    bool is_null() const
+    {
+        return ptr == null_ptr.get();
+    }
+
+    void set_traversable(const bool value)
+    {
+        _traversable = value;
+    }
+
+    bool points_to(const smart_ptr &s_ptr) const noexcept
+    {
+        return ptr == s_ptr.get();
+    }
+
+protected:
+    raw_pointer_to_base_interface ptr{nullptr};
+
+private:
+    std::unique_ptr<null_reference_type> null_ptr{ new null_reference_type() };
+    bool _traversable{false};
+};
+
+
+template <class Base>
+class null_reference : public Base
+{
+    using self = null_reference;
+
+public:
+    using value_type = typename Base::value_type;
+    using raw_pointer_to_base_interface = typename Base::raw_pointer_to_base_interface;
+
+    using iterator = typename Base::iterator;
+    using const_iterator = typename Base::const_iterator;
+    using reverse_iterator = typename Base::reverse_iterator;
+    using const_reverse_iterator = typename Base::const_reverse_iterator;
+
+public:
+    null_reference()
+    {
+    }
+
+    void push_back(const value_type &another) override
+    {
+        
+    }
+
+    void push_back(value_type &&another) override
+    {
+       
+    }
+
+    iterator begin() override
+    {
+        return iterator();
+    }
+
+    iterator end() override
+    {
+        return iterator();
+    }
+
+    reverse_iterator rbegin() override
+    {
+        return reverse_iterator();
+    }
+
+    reverse_iterator rend() override
+    {
+        return reverse_iterator();
+    }
+
+    const_iterator cbegin() const override
+    {
+        return const_iterator();
+    }
+
+    const_iterator cend() const override
+    {
+        return const_iterator();
+    }
+
+    const_reverse_iterator crbegin() const override
+    {
+        return const_reverse_iterator();
+    }
+
+    const_reverse_iterator crend() const override
+    {
+        return const_reverse_iterator();
+    }
+
+    void clear() override
+    {
+        
+    }
+
+    size_t size() const override final
+    {
+        return size_t();
+    }
+
+    bool empty() const override final
+    {
+        return true;
+    }
+
+    size_t nested_hierarchy_size() const override final
+    {
+        return size_t();
+    }
+
+    bool is_leaf() const override final
+    {
+        return false;
+    }
+
+    bool is_composite() const override final
+    {
+        return false;
+    }
+
+    bool is_reference() const override final
+    {
+        return true;
+    }
+
+    bool is_traversable() const noexcept override final
+    {
+        return false;
+    }
+
+    /*raw_pointer_to_base_interface clone() const override
+    {
+        return new self(*this);
+    }*/
 };
 
 
@@ -993,6 +1424,7 @@ public:
 protected:
     pointer_to_implementation impl;
 };
+
 
 
 template
@@ -1340,7 +1772,8 @@ private:
 
     bool can_go_down() const
     {
-        return (*top_it())->size() > 0;
+        const auto &node = *top_it();
+        return node->is_traversable() && node->size() > 0;
     }
 
 
@@ -1403,6 +1836,7 @@ private:
 private:
     stack_container_type iters;
 };
+
 
 
 template <class LinearIterator, bool reversed>
@@ -1578,6 +2012,7 @@ private:
 private:
     queue_container_type iters;
 };
+
 
 
 template <class CompositeObjectIterator>

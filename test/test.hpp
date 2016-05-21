@@ -139,6 +139,7 @@ namespace unittest
         }
     };
 
+
     class test_class_leaf : public composite_object::leaf<test_class_composite_base_impl>
     {
     public:
@@ -151,59 +152,141 @@ namespace unittest
     };
 
 
+    class test_class_null_reference :
+        public composite_object::null_reference<test_class_composite_interface>
+    {
+    public:
+        test_class_null_reference()
+        {
+        }
+
+        int get_value() const override
+        {
+            return int();
+        }
+
+        void set_value(int val) override
+        {
+        }
+
+        raw_pointer_to_base_interface clone() const override
+        {
+            return new test_class_null_reference(*this);
+        }
+    };
+
+
+    class test_class_reference : public test_class_composite_interface::reference<test_class_null_reference>
+    {
+        using self = test_class_reference;
+        using parent = test_class_composite_interface::reference<test_class_null_reference>;
+
+    public:
+        test_class_reference() : parent()
+        {
+        }
+
+        test_class_reference(const smart_ptr &source) : parent(source)
+        {
+        }
+
+        int get_value() const override
+        {
+            return ptr->get_value();
+        }
+
+        void set_value(int val) override
+        {
+            ptr->set_value(val);
+        }
+
+        raw_pointer_to_base_interface clone() const override
+        {
+            return new self(*this);
+        }
+
+    public:
+        static bool are_same(const smart_ptr &a, const self &b)
+        {
+            return a->get_value() == b.get_value();
+        }
+
+    };
+
+
     struct basic_test_setup
     {
         basic_test_setup()
         {
-            leaf_a = std::make_shared<test_class_leaf>(1);
-            leaf_b = std::make_shared<test_class_leaf>(2);
-            leaf_c = std::make_shared<test_class_leaf>(3);
-            auto composite_c_tmp = std::make_shared<test_class_composite>(4);
-            composite_c_tmp->cont().push_back(leaf_c);
-            composite_c = composite_c_tmp;
+            using smart_ptr = typename test_class_composite_interface::smart_ptr;
 
-            obj.cont() = { leaf_a, leaf_b, composite_c };
+            obj.push_back(smart_ptr(new test_class_leaf(1)));
+            obj.push_back(smart_ptr(new test_class_leaf(2)));
+            obj.push_back(smart_ptr(new test_class_composite(4)));
+            (*obj.rbegin())->push_back(smart_ptr(new test_class_leaf(3)));
+
+            auto it = obj.begin();
+            leaf_a = *it;
+            leaf_b = *(++it);
+            composite_c = *(++it);
+            leaf_c = *((*it)->begin());
         }
 
         test_class_composite obj;
-        decltype(obj)::value_type leaf_a, leaf_b, leaf_c, composite_c;
+        test_class_reference leaf_a, leaf_b, leaf_c, composite_c;
     };
 
 
-    struct construction_and_lifetime : public test
+    struct construction : public test
     {
-        const char * name() const override { return "Construction and lifetime"; }
+        const char * name() const override { return "Construction"; }
 
         void run() override
         {
             const int val = 100500;
             auto obj = std::make_shared<test_class_composite>(val);
             assert(obj->get_value() == val);
-
-            test_lifetime();
         }
+    };
 
-    private:
-        void test_lifetime()
+    struct reference_type: public test
+    {
+        const char * name() const override { return "Reference type"; }
+
+        void run() override
         {
-            test_class_composite_base_impl::reset_obj_lifetime_stat();
+            using smart_ptr = test_class_composite_interface::smart_ptr;
 
-            auto t = std::make_shared<test_class_composite>();
-            {
-                auto t1 = std::make_shared<test_class_composite>(1);
-                auto t2 = std::make_shared<test_class_composite>(2);
-                auto t3 = std::make_shared<test_class_composite>(3);
+            smart_ptr obj(new test_class_composite(1));
+            test_class_reference obj_ref(obj);
+            assert(obj_ref.is_reference());
+            test_class_reference obj_ref_copy(obj_ref);
 
-                auto t_leaf = std::make_shared<test_class_leaf>(1000);
-                t3->cont().push_back(t_leaf);
+            assert(!obj_ref.is_null() && !obj_ref_copy.is_null());
+            assert(obj_ref.get_value() == obj->get_value());
+            assert(obj_ref.points_to(obj));
+            assert(obj_ref_copy.points_to(obj));
 
-                t->cont() = { t1, t2, t3 };
-                assert(t->size() == 3);
-            }
+            test_class_reference default_ref{};
+            assert(default_ref.is_null());
+            default_ref = obj;
+            assert(!default_ref.is_null());
+            assert(default_ref.points_to(obj));
 
-            t.reset();
+            assert(obj_ref.is_traversable() == false);
+            obj_ref.set_traversable(true);
+            assert(obj_ref.is_traversable());
 
-            assert(test_class_composite_base_impl::get_obj_lifetime_stat().is_lifetime_valid());
+            default_ref.reset();
+            assert(default_ref.is_null());
+
+            smart_ptr leaf(new test_class_leaf(2));
+            obj_ref.push_back(std::move(leaf));
+            assert(obj_ref.size() == 1);
+            assert(obj->size() == 1);
+            assert(obj_ref.nested_hierarchy_size() == 1);
+            obj_ref.set_traversable(false);
+            assert(obj_ref.size() == 0);
         }
     };
 
@@ -217,17 +300,17 @@ namespace unittest
             auto it = obj_copy.begin();
             (*it)->set_value(1000);
 
-            assert(leaf_a->get_value() == 1);
+            assert(leaf_a.get_value() == 1);
             assert((*it)->get_value() == 1000);
-            assert ((*it)->get_value() != leaf_a->get_value());
+            assert ((*it)->get_value() != leaf_a.get_value());
 
             std::advance(it, 2);
-            auto composite_c_copy = *it;
-            auto leaf_c_copy = *(composite_c_copy->begin());
-            leaf_c_copy->set_value(2000);
+            test_class_reference composite_c_ref(*it);
+            test_class_reference leaf_c_ref(*composite_c_ref.begin());
+            leaf_c_ref.set_value(2000);
             
-            assert(leaf_c->get_value() == 3);
-            assert(leaf_c->get_value() != leaf_c_copy->get_value());
+            assert(leaf_c.get_value() == 3);
+            assert(leaf_c.get_value() != leaf_c_ref.get_value());
         }
     };
 
@@ -241,12 +324,12 @@ namespace unittest
 
             assert(obj.size() == 0);
 
-            auto moved_leaf_a = *obj_moved.begin();
-            moved_leaf_a->set_value(1000);
+            test_class_reference moved_leaf_a_ref = *obj_moved.begin();
+            moved_leaf_a_ref.set_value(1000);
 
-            assert(leaf_a->get_value() == 1000);
-            assert(moved_leaf_a->get_value() == 1000);
-            assert(moved_leaf_a->get_value() == leaf_a->get_value());
+            assert(leaf_a.get_value() == 1000);
+            assert(moved_leaf_a_ref.get_value() == 1000);
+            assert(moved_leaf_a_ref.get_value() == leaf_a.get_value());
         }
     };
 
@@ -256,15 +339,16 @@ namespace unittest
 
         void run() override
         {
-            auto new_element = std::make_shared<test_class_composite>(25);
+            using smart_ptr = typename test_class_composite_interface::smart_ptr;
+            auto new_element = smart_ptr(new test_class_composite(25));
             const size_t size = obj.size();
             const size_t hsize = obj.nested_hierarchy_size();
-            obj.push_back(new_element);
+            obj.push_back(std::move(new_element));
             assert(obj.size() == (size + 1));
             assert(obj.nested_hierarchy_size() == (hsize + 1));
 
             // moving
-            auto new_element2 = std::make_shared<test_class_composite>(32);
+            auto new_element2 = smart_ptr(new test_class_composite(32));
             obj.push_back(std::move(new_element2));
             assert(!new_element2);
             assert(obj.size() == (size + 2));
@@ -277,8 +361,8 @@ namespace unittest
 
         void run() override
         {
-            assert(leaf_a->is_leaf());
-            assert(!composite_c->is_leaf());
+            assert(leaf_a.is_leaf());
+            assert(!composite_c.is_leaf());
         }
     };
 
@@ -289,8 +373,8 @@ namespace unittest
         void run() override
         {
             assert(obj.is_composite());
-            assert(!leaf_a->is_composite());
-            assert(composite_c->is_composite());
+            assert(!leaf_a.is_composite());
+            assert(composite_c.is_composite());
         }
     };
 
@@ -312,8 +396,9 @@ namespace unittest
 
         void run() override
         {
+            using smart_ptr = typename test_class_composite_interface::smart_ptr;
             assert(obj.size() == 3);
-            obj.cont().push_back(std::make_shared<test_class_leaf>(1));
+            obj.cont().push_back(smart_ptr(new test_class_leaf(1)));
             assert(obj.size() == 4);
         }
     };
@@ -324,8 +409,9 @@ namespace unittest
 
         void run() override
         {
+            using smart_ptr = typename test_class_composite_interface::smart_ptr;
             assert(obj.nested_hierarchy_size() == 4);
-            obj.cont().push_back(std::make_shared<test_class_leaf>(1));
+            obj.cont().push_back(smart_ptr(new test_class_leaf(1)));
             assert(obj.nested_hierarchy_size() == 5);
             obj.clear();
             assert(obj.nested_hierarchy_size() == 0);
@@ -340,9 +426,10 @@ namespace unittest
         {
             using composite_type = test_class_composite;
             using leaf_type = test_class_leaf;
-            auto composite = std::make_shared<composite_type>(0);
-            auto leaf = std::make_shared<leaf_type>(1);
-            composite->cont().push_back(leaf);
+            using smart_ptr = typename test_class_composite_interface::smart_ptr;
+            auto composite = smart_ptr(new composite_type(0));
+            auto leaf = smart_ptr(new leaf_type(1));
+            composite->push_back(smart_ptr(new test_class_reference(leaf)));
 
             // composite
 
@@ -461,27 +548,39 @@ namespace unittest
             {
                 // Structure was taken from https://en.wikipedia.org/wiki/Tree_traversal
 
-                f = std::make_shared<test_class_composite>(0);
-                a = std::make_shared<test_class_composite>(1);
-                b = std::make_shared<test_class_composite>(2);
-                c = std::make_shared<test_class_composite>(3);
-                d = std::make_shared<test_class_composite>(4);
-                e = std::make_shared<test_class_composite>(5);
-                g = std::make_shared<test_class_composite>(6);
-                i = std::make_shared<test_class_composite>(7);
-                h = std::make_shared<test_class_leaf>(8);
+                using smart_ptr = typename test_class_composite_interface::smart_ptr;
 
-                f->push_back(b);
-                f->push_back(g);
+                f = smart_ptr(new test_class_composite(0));
+                a = smart_ptr(new test_class_composite(1));
+                b = smart_ptr(new test_class_composite(2));
+                c = smart_ptr(new test_class_composite(3));
+                d = smart_ptr(new test_class_composite(4));
+                e = smart_ptr(new test_class_composite(5));
+                g = smart_ptr(new test_class_composite(6));
+                i = smart_ptr(new test_class_composite(7));
+                h = smart_ptr(new test_class_leaf(8));
 
-                b->push_back(a);
-                b->push_back(d);
+                //using smart_ptr_to_ref = test_class_composite_interface::smart_ptr_template<test_class_reference>;
 
-                d->push_back(c);
-                d->push_back(e);
+                auto b_ref_ptr = new test_class_reference(b); b_ref_ptr->set_traversable(true);
+                auto g_ref_ptr = new test_class_reference(g); g_ref_ptr->set_traversable(true);
+                f->push_back(smart_ptr(b_ref_ptr));
+                f->push_back(smart_ptr(g_ref_ptr));
 
-                g->push_back(i);
-                i->push_back(h);
+                auto a_ref_ptr = new test_class_reference(a); a_ref_ptr->set_traversable(true);
+                auto d_ref_ptr = new test_class_reference(d); d_ref_ptr->set_traversable(true);
+                b->push_back(smart_ptr(a_ref_ptr));
+                b->push_back(smart_ptr(d_ref_ptr));
+
+                auto c_ref_ptr = new test_class_reference(c); c_ref_ptr->set_traversable(true);
+                auto e_ref_ptr = new test_class_reference(e); e_ref_ptr->set_traversable(true);
+                d->push_back(smart_ptr(c_ref_ptr));
+                d->push_back(smart_ptr(e_ref_ptr));
+
+                auto i_ref_ptr = new test_class_reference(i); i_ref_ptr->set_traversable(true);
+                auto h_ref_ptr = new test_class_reference(h); h_ref_ptr->set_traversable(true);
+                g->push_back(smart_ptr(i_ref_ptr));
+                i->push_back(smart_ptr(h_ref_ptr));
             }
         };
 
@@ -545,9 +644,9 @@ namespace unittest
                     test_class_composite_interface::iterator it_copy;
                     it_copy = it;
                     assert((*it_copy)->get_value() == (*it)->get_value());
-                    assert((*it_copy)->get_value() == leaf_a->get_value());
-                    assert((*it++)->get_value() == leaf_b->get_value());
-                    assert((*it_copy)->get_value() == leaf_a->get_value());
+                    assert((*it_copy)->get_value() == leaf_a.get_value());
+                    assert((*it++)->get_value() == leaf_b.get_value());
+                    assert((*it_copy)->get_value() == leaf_a.get_value());
                 }
             };
 
@@ -591,8 +690,8 @@ namespace unittest
                 {
                     const auto it = obj.begin();
                     test_class_composite_interface::value_type &leaf_a_ref = *it;
-                    assert(leaf_a_ref->get_value() == leaf_a->get_value());
-                    assert(it->operator->()->get_value() == leaf_a->get_value());
+                    assert(leaf_a_ref->get_value() == leaf_a.get_value());
+                    assert(it->operator->()->get_value() == leaf_a.get_value());
                 }
             };
 
@@ -603,14 +702,14 @@ namespace unittest
                 void run() override
                 {
                     auto incremented_it = ++obj.begin();
-                    assert((*incremented_it)->get_value() == leaf_b->get_value());
+                    assert((*incremented_it)->get_value() == leaf_b.get_value());
                     ++incremented_it;
-                    assert((*incremented_it)->get_value() == composite_c->get_value());
+                    assert((*incremented_it)->get_value() == composite_c.get_value());
                     auto decremented_it = incremented_it--;
-                    assert((*incremented_it)->get_value() == composite_c->get_value());
+                    assert((*incremented_it)->get_value() == composite_c.get_value());
                     assert(++incremented_it == obj.end());
-                    assert((*decremented_it)->get_value() == leaf_b->get_value());
-                    assert((*--decremented_it)->get_value() == leaf_a->get_value());
+                    assert((*decremented_it)->get_value() == leaf_b.get_value());
+                    assert((*--decremented_it)->get_value() == leaf_a.get_value());
                 }
             };
 
@@ -688,9 +787,9 @@ namespace unittest
                     test_class_composite_interface::reverse_iterator it_copy;
                     it_copy = it;
                     assert((*it_copy)->get_value() == (*it)->get_value());
-                    assert((*it_copy)->get_value() == composite_c->get_value());
-                    assert((*it++)->get_value() == leaf_b->get_value());
-                    assert((*it_copy)->get_value() == composite_c->get_value());
+                    assert((*it_copy)->get_value() == composite_c.get_value());
+                    assert((*it++)->get_value() == leaf_b.get_value());
+                    assert((*it_copy)->get_value() == composite_c.get_value());
                 }
             };
 
@@ -734,8 +833,8 @@ namespace unittest
                 {
                     const auto it = obj.rbegin();
                     test_class_composite_interface::value_type &composite_c_ref = *it;
-                    assert(composite_c->get_value() == composite_c_ref->get_value());
-                    assert(it->operator->()->get_value() == composite_c->get_value());
+                    assert(composite_c.get_value() == composite_c_ref->get_value());
+                    assert(it->operator->()->get_value() == composite_c.get_value());
                 }
             };
 
@@ -746,14 +845,14 @@ namespace unittest
                 void run() override
                 {
                     auto incremented_it = ++obj.rbegin();
-                    assert((*incremented_it)->get_value() == leaf_b->get_value());
+                    assert((*incremented_it)->get_value() == leaf_b.get_value());
                     ++incremented_it;
-                    assert((*incremented_it)->get_value() == leaf_a->get_value());
+                    assert((*incremented_it)->get_value() == leaf_a.get_value());
                     auto decremented_it = incremented_it--;
-                    assert((*incremented_it)->get_value() == leaf_a->get_value());
+                    assert((*incremented_it)->get_value() == leaf_a.get_value());
                     assert(++incremented_it == obj.rend());
-                    assert((*decremented_it)->get_value() == leaf_b->get_value());
-                    assert((*--decremented_it)->get_value() == composite_c->get_value());
+                    assert((*decremented_it)->get_value() == leaf_b.get_value());
+                    assert((*--decremented_it)->get_value() == composite_c.get_value());
                 }
             };
 
@@ -911,8 +1010,14 @@ namespace unittest
 
                 void run() override
                 {
-                    const std::vector<test_class_composite_interface::value_type> expected_result{ b, a, d, c, e, g, i, h };
-                    assert(std::equal(f->cdf_pre_order_begin(), f->cdf_pre_order_end(), expected_result.cbegin()));
+                    const std::vector<test_class_reference> expected_result{ b, a, d, c, e, g, i, h };
+                    assert(expected_result.front().points_to(b));
+                    assert(expected_result.back().points_to(h));
+
+                    assert(std::equal(f->cdf_pre_order_begin(),
+                                      f->cdf_pre_order_end(),
+                                      expected_result.cbegin(),
+                                      test_class_reference::are_same));
                 }
             };
 
@@ -925,8 +1030,11 @@ namespace unittest
 
                 void run() override
                 {
-                    const std::vector<test_class_composite_interface::value_type> expected_result{ g, i, h, b, d, e, c, a };
-                    assert(std::equal(f->crdf_pre_order_begin(), f->crdf_pre_order_end(), expected_result.cbegin()));
+                    const std::vector<test_class_reference> expected_result{ g, i, h, b, d, e, c, a };
+                    assert(std::equal(f->crdf_pre_order_begin(),
+                                      f->crdf_pre_order_end(),
+                                      expected_result.cbegin(),
+                                      test_class_reference::are_same));
                 }
             };
 
@@ -939,8 +1047,11 @@ namespace unittest
 
                 void run() override
                 {
-                    const std::vector<test_class_composite_interface::value_type> expected_result{ a, c, e, d, b, h, i, g };
-                    assert(std::equal(f->cdf_post_order_begin(), f->cdf_post_order_end(), expected_result.cbegin()));
+                    const std::vector<test_class_reference> expected_result{ a, c, e, d, b, h, i, g };
+                    assert(std::equal(f->cdf_post_order_begin(),
+                                      f->cdf_post_order_end(),
+                                      expected_result.cbegin(),
+                                      test_class_reference::are_same));
                 }
             };
 
@@ -953,8 +1064,11 @@ namespace unittest
 
                 void run() override
                 {
-                    const std::vector<test_class_composite_interface::value_type> expected_result{ h, i, g, e, c, d, a, b };
-                    assert(std::equal(f->crdf_post_order_begin(), f->crdf_post_order_end(), expected_result.cbegin()));
+                    const std::vector<test_class_reference> expected_result{ h, i, g, e, c, d, a, b };
+                    assert(std::equal(f->crdf_post_order_begin(),
+                                      f->crdf_post_order_end(),
+                                      expected_result.cbegin(),
+                                      test_class_reference::are_same));
                 }
             };
         }
@@ -1099,8 +1213,11 @@ namespace unittest
 
                 void run() override
                 {
-                    const std::vector<test_class_composite_interface::value_type> expected_result{ b, g, a, d, i, c, e, h };
-                    assert(std::equal(f->cbf_begin(), f->cbf_end(), expected_result.cbegin()));
+                    const std::vector<test_class_reference> expected_result{ b, g, a, d, i, c, e, h };
+                    assert(std::equal(f->cbf_begin(),
+                                      f->cbf_end(),
+                                      expected_result.cbegin(),
+                                      test_class_reference::are_same));
                 }
             };
 
@@ -1113,8 +1230,11 @@ namespace unittest
 
                 void run() override
                 {
-                    const std::vector<test_class_composite_interface::value_type> expected_result{ g, b, i, d, a, h, e, c };
-                    assert(std::equal(f->crbf_begin(), f->crbf_end(), expected_result.cbegin()));
+                    const std::vector<test_class_reference> expected_result{ g, b, i, d, a, h, e, c };
+                    assert(std::equal(f->crbf_begin(),
+                                      f->crbf_end(),
+                                      expected_result.cbegin(),
+                                      test_class_reference::are_same));
                 }
             };
         }
@@ -1124,7 +1244,8 @@ namespace unittest
     void run()
     {
         std::vector<std::unique_ptr<test>> tests;
-        tests.emplace_back(new construction_and_lifetime());
+        tests.emplace_back(new construction());
+        tests.emplace_back(new reference_type());
         tests.emplace_back(new copy_construction());
         tests.emplace_back(new move_construction());
         tests.emplace_back(new push_back_function());
