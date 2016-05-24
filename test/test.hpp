@@ -176,18 +176,25 @@ namespace unittest
     };
 
 
-    class test_class_reference : public test_class_composite_interface::reference<test_class_null_reference>
+    class test_class_reference : public test_class_composite_interface::reference
     {
         using self = test_class_reference;
-        using parent = test_class_composite_interface::reference<test_class_null_reference>;
+        using parent = typename test_class_composite_interface::reference;
 
     public:
-        test_class_reference() : parent()
+        test_class_reference()
         {
+            init();
         }
 
         test_class_reference(const smart_ptr &source) : parent(source)
         {
+        }
+
+        null_reference_type *obtain_null_reference() override
+        {
+            static test_class_null_reference obj{};
+            return &obj;
         }
 
         int get_value() const override
@@ -548,6 +555,13 @@ namespace unittest
             {
                 // Structure was taken from https://en.wikipedia.org/wiki/Tree_traversal
 
+                /*
+                 *                          (f)
+                 *              (b)                     (g)
+                 *        (a)         (d)                      (i)
+                 *               (c)       (e)            (h)
+                */
+
                 using smart_ptr = typename test_class_composite_interface::smart_ptr;
 
                 f = smart_ptr(new test_class_composite(0));
@@ -562,25 +576,24 @@ namespace unittest
 
                 //using smart_ptr_to_ref = test_class_composite_interface::smart_ptr_template<test_class_reference>;
 
-                auto b_ref_ptr = new test_class_reference(b); b_ref_ptr->set_traversable(true);
-                auto g_ref_ptr = new test_class_reference(g); g_ref_ptr->set_traversable(true);
-                f->push_back(smart_ptr(b_ref_ptr));
-                f->push_back(smart_ptr(g_ref_ptr));
+                auto traversable_reference = [](const smart_ptr &ptr)
+                {
+                    auto new_obj = new test_class_reference(ptr);
+                    new_obj->set_traversable(true);
+                    return smart_ptr(new_obj);
+                };
 
-                auto a_ref_ptr = new test_class_reference(a); a_ref_ptr->set_traversable(true);
-                auto d_ref_ptr = new test_class_reference(d); d_ref_ptr->set_traversable(true);
-                b->push_back(smart_ptr(a_ref_ptr));
-                b->push_back(smart_ptr(d_ref_ptr));
+                f->push_back(traversable_reference(b));
+                f->push_back(traversable_reference(g));
 
-                auto c_ref_ptr = new test_class_reference(c); c_ref_ptr->set_traversable(true);
-                auto e_ref_ptr = new test_class_reference(e); e_ref_ptr->set_traversable(true);
-                d->push_back(smart_ptr(c_ref_ptr));
-                d->push_back(smart_ptr(e_ref_ptr));
+                b->push_back(traversable_reference(a));
+                b->push_back(traversable_reference(d));
 
-                auto i_ref_ptr = new test_class_reference(i); i_ref_ptr->set_traversable(true);
-                auto h_ref_ptr = new test_class_reference(h); h_ref_ptr->set_traversable(true);
-                g->push_back(smart_ptr(i_ref_ptr));
-                i->push_back(smart_ptr(h_ref_ptr));
+                d->push_back(traversable_reference(c));
+                d->push_back(traversable_reference(e));
+
+                g->push_back(traversable_reference(i));
+                i->push_back(traversable_reference(h));
             }
         };
 

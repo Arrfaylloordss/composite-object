@@ -68,8 +68,8 @@ template <class Base>
 
 template
     <
-    class Base,
-    class NullReference = null_reference<Base>
+    class Base
+    //class NullReference = null_reference<Base>
     >
     class reference;
 
@@ -102,7 +102,11 @@ template
     class df_hierarchical_iterator_template;
 
 
-template <class LinearIterator, bool reversed = false>
+template
+    <
+    class LinearIterator,
+    bool reversed = false
+    >
     class bf_hierarchical_iterator_template;
 
 //
@@ -120,9 +124,7 @@ class abstract : public Base
 public:
     using smart_ptr = typename PointerModel<self>::type;
     using value_type = smart_ptr;
-
-    template <class NullReference = null_reference<self>>
-        using reference = composite_object::reference<self, NullReference>;
+    using reference = composite_object::reference<self>;
 
     using raw_pointer_to_base_interface = self*;
 
@@ -204,12 +206,31 @@ public:
     using const_reverse_bf_hierarchical_iterator =
         bf_hierarchical_iterator_template<const_reverse_iterator, true>;
 
+    struct predicate
+    {
+        virtual bool operator()(const value_type &obj) = 0;
+    };
+
+    struct binary_predicate
+    {
+        virtual bool operator()(const value_type &a, const value_type &b) = 0;
+    };
+
+    enum references_remove_mode
+    {
+        do_not_track_references,
+        remove_references,
+        nullify_references
+    };
+
 public:
     virtual void push_back(const value_type &) = 0;
     virtual void push_back(value_type &&) = 0;
+    virtual void remove_if(predicate & function, const references_remove_mode mode = remove_references) = 0;
     virtual bool is_leaf() const = 0;
     virtual bool is_composite() const = 0;
-    virtual bool is_reference() const = 0;
+    virtual bool is_reference() const noexcept = 0;
+    virtual bool is_null_reference() const noexcept = 0;
     virtual bool is_traversable() const noexcept = 0;
     virtual void clear() = 0;
     virtual size_t size() const = 0;
@@ -485,6 +506,13 @@ public:
 
     }
 
+    void remove_if(
+        typename parent::predicate &func,
+        const typename parent::references_remove_mode mode
+    ) override
+    {
+    }
+
     iterator begin() override
     {
         return end();
@@ -554,7 +582,12 @@ public:
         return false;
     }
 
-    bool is_reference() const override final
+    bool is_reference() const noexcept override final
+    {
+        return false;
+    }
+
+    bool is_null_reference() const noexcept override final
     {
         return false;
     }
@@ -732,6 +765,11 @@ public:
             return iterator_impl_specific<category, UnderlyingContainerIterator>::difference(_it, upcast(another)->_it);
         }
 
+        UnderlyingContainerIterator get_cont_iterator() const
+        {
+            return _it;
+        }
+
     private:
         iterator_impl_template *upcast(const base_interface *ptr) const
         {
@@ -788,6 +826,21 @@ public:
     void push_back(value_type &&another) override
     {
         children.push_back(std::move(another));
+    }
+
+    void remove_if(
+        typename parent::predicate &func,
+        const typename parent::references_remove_mode mode
+    ) override
+    {
+        if (mode == parent::do_not_track_references)
+        {
+            remove_if__do_not_track_references_mode(func);
+        }
+        else
+        {
+            remove_if__handle_references_mode(func, mode == parent::nullify_references);
+        }
     }
 
     // linear iterators
@@ -868,7 +921,12 @@ public:
         return true;
     }
 
-    bool is_reference() const override final
+    bool is_reference() const noexcept override final
+    {
+        return false;
+    }
+
+    bool is_null_reference() const noexcept override final
     {
         return false;
     }
@@ -895,16 +953,77 @@ private:
     {
     }
 
+    void erase(const_iterator position)
+    {
+        auto ptr_to_impl = position.get_impl().get();
+        auto real_impl = static_cast<const_iterator_impl*>(ptr_to_impl);
+        children.erase(real_impl->get_cont_iterator());
+    }
+
+    void remove_if__do_not_track_references_mode(typename parent::predicate &func)
+    {
+        for (auto it = cdf_post_order_begin(); it != cdf_post_order_end(); ++it)
+        {
+            const value_type &child = *it;
+            if (func(child))
+            {
+                auto &linear_it = it.get_linear_iterator();
+                erase(linear_it);
+            }
+        }
+    }
+
+    void remove_if__handle_references_mode(typename parent::predicate &func, const bool nullify)
+    {
+        std::vector<const_iterator> objects, references;
+
+        for (auto it = cdf_post_order_begin(); it != cdf_post_order_end(); ++it)
+        {
+            const value_type &child = *it;
+            if (func(child))
+            {
+                auto &linear_it = it.get_linear_iterator();
+                if (!child->is_reference())
+                {
+                    objects.push_back(linear_it);
+                }
+                else
+                {
+                    references.push_back(linear_it);
+                }
+            }
+        }
+
+        for (auto it = references.cbegin(); it != references.cend(); ++it)
+        {
+            if (nullify)
+            {
+                raw_pointer_to_base_interface ptr = (*it)->get();
+                static_cast<typename parent::reference*>(ptr)->reset();
+            }
+            else
+            {
+                erase(*it);
+            }
+        }
+
+        for (auto it = objects.cbegin(); it != objects.cend(); ++it)
+        {
+            erase(*it);
+        }
+    }
+
 protected:
     container_type children;
 };
 
 
 
-template <class Base, class NullReference>
+template <class Base>
 class reference : public Base
 {
     using self = reference;
+    using parent = Base;
 
 public:
     using smart_ptr = typename Base::smart_ptr;
@@ -916,29 +1035,28 @@ public:
     using reverse_iterator = typename Base::reverse_iterator;
     using const_reverse_iterator = typename Base::const_reverse_iterator;
 
-    using null_reference_type = NullReference;
+    using null_reference_type = null_reference<Base>;
 
 public:
     reference()
     {
+    }
+
+    void init()
+    {
         reset();
+    }
+
+    virtual null_reference_type *obtain_null_reference() = 0;
+
+    virtual void remove_null_reference()
+    {
+        // Mainly useful to delete null_reference objects which were constructed on heap.
     }
 
     explicit reference(const smart_ptr &source)
     {
-        if (!source->is_reference())
-        {
-            ptr = source.get();
-        }
-        else
-        {
-            self *ref_obj = static_cast<self*>(source.get());
-            if (!ref_obj->is_null())
-            {
-                ptr = ref_obj->ptr;
-                _traversable = ref_obj->_traversable;
-            }
-        }
+        assign(source);
     }
 
     reference(const self &another)
@@ -947,6 +1065,10 @@ public:
         {
             ptr = another.ptr;
             _traversable = another._traversable;
+        }
+        else
+        {
+            reset();
         }
     }
 
@@ -958,24 +1080,15 @@ public:
             _traversable = another._traversable;
             another.reset();
         }
+        else
+        {
+            reset();
+        }
     }
 
     self &operator=(const smart_ptr &source)
     {
-        if (!source->is_reference())
-        {
-            ptr = source.get();
-        }
-        else
-        {
-            self *ref_obj = (self*)(source.get());
-            if (!ref_obj->is_null())
-            {
-                ptr = ref_obj->ptr;
-                _traversable = ref_obj->_traversable;
-            }
-        }
-
+        assign(source);
         return *this;
     }
 
@@ -1010,6 +1123,32 @@ public:
         return *this;
     }
 
+    void assign(const smart_ptr &source)
+    {
+        if (is_null() && !source->is_null_reference())
+        {
+            remove_null_reference();
+        }
+
+        if (!source->is_reference())
+        {          
+            ptr = source.get();
+        }
+        else
+        {
+            self *ref_obj = static_cast<self*>(source.get());
+            if (!ref_obj->is_null())
+            {
+                ptr = ref_obj->ptr;
+                _traversable = ref_obj->_traversable;
+            }
+            else
+            {
+                reset();
+            }
+        }
+    }
+
     void push_back(const value_type &another) override
     {
         ptr->push_back(another);
@@ -1018,6 +1157,13 @@ public:
     void push_back(value_type &&another) override
     {
         ptr->push_back(std::move(another));
+    }
+
+    void remove_if(
+        typename parent::predicate &func,
+        const typename parent::references_remove_mode mode) override
+    {
+        ptr->remove_if(func);
     }
 
     iterator begin() override
@@ -1090,9 +1236,14 @@ public:
         return ptr->is_composite();
     }
 
-    bool is_reference() const override final
+    bool is_reference() const noexcept override final
     {
         return true;
+    }
+
+    bool is_null_reference() const noexcept override final
+    {
+        return ptr ? ptr->is_null_reference() : true;
     }
 
     bool is_traversable() const noexcept override final
@@ -1102,12 +1253,17 @@ public:
 
     void reset()
     {
-        ptr = null_ptr.get();
+        if (ptr && ptr->is_null_reference())
+        {
+            return;
+        }
+
+        ptr = obtain_null_reference();
     }
 
     bool is_null() const
     {
-        return ptr == null_ptr.get();
+        return is_null_reference();
     }
 
     void set_traversable(const bool value)
@@ -1115,16 +1271,15 @@ public:
         _traversable = value;
     }
 
-    bool points_to(const smart_ptr &s_ptr) const noexcept
+    bool points_to(const smart_ptr &another_ptr) const noexcept
     {
-        return ptr == s_ptr.get();
+        return ptr == another_ptr.get();
     }
 
 protected:
     raw_pointer_to_base_interface ptr{nullptr};
 
 private:
-    std::unique_ptr<null_reference_type> null_ptr{ new null_reference_type() };
     bool _traversable{false};
 };
 
@@ -1133,10 +1288,11 @@ template <class Base>
 class null_reference : public Base
 {
     using self = null_reference;
+    using parent = Base;
 
 public:
+    using smart_ptr = typename Base::smart_ptr;
     using value_type = typename Base::value_type;
-    using raw_pointer_to_base_interface = typename Base::raw_pointer_to_base_interface;
 
     using iterator = typename Base::iterator;
     using const_iterator = typename Base::const_iterator;
@@ -1156,6 +1312,13 @@ public:
     void push_back(value_type &&another) override
     {
        
+    }
+
+    void remove_if(
+        typename parent::predicate &func, 
+        const typename parent::references_remove_mode mode
+    ) override
+    {
     }
 
     iterator begin() override
@@ -1228,7 +1391,12 @@ public:
         return false;
     }
 
-    bool is_reference() const override final
+    bool is_reference() const noexcept override final
+    {
+        return true;
+    }
+
+    bool is_null_reference() const noexcept override final
     {
         return true;
     }
@@ -1237,11 +1405,6 @@ public:
     {
         return false;
     }
-
-    /*raw_pointer_to_base_interface clone() const override
-    {
-        return new self(*this);
-    }*/
 };
 
 
@@ -1419,6 +1582,11 @@ public:
     bool empty() const
     {
         return impl == nullptr;
+    }
+
+    pointer_to_implementation &get_impl()
+    {
+        return impl;
     }
 
 protected:
@@ -1714,6 +1882,16 @@ public:
         push(node_iters{ _begin, _end, _begin });
     }
 
+    LinearIterator &get_linear_iterator()
+    {
+        return top_it();
+    }
+
+    const LinearIterator &get_linear_iterator() const
+    {
+        return top_it();
+    }
+
 private:
     LinearIterator &top_it()
     {
@@ -1948,6 +2126,16 @@ public:
     bool empty() const
     {
         return iters.empty();
+    }
+
+    LinearIterator &get_linear_iterator()
+    {
+        return current_it();
+    }
+
+    const LinearIterator &get_linear_iterator() const
+    {
+        return current_it();
     }
 
 private:
