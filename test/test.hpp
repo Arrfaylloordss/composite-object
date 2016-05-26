@@ -193,7 +193,7 @@ namespace unittest
 
         null_reference_type *obtain_null_reference() override
         {
-            static test_class_null_reference obj{};
+            static test_class_null_reference obj;
             return &obj;
         }
 
@@ -359,6 +359,65 @@ namespace unittest
             obj.push_back(std::move(new_element2));
             assert(!new_element2);
             assert(obj.size() == (size + 2));
+        }
+    };
+
+    struct remove_if_function : public test
+    {
+        const char * name() const override { return "`remove_if()` function"; }
+
+        test_class_composite construct_obj()
+        {
+            test_class_composite obj;
+
+            using smart_ptr = decltype(obj)::smart_ptr;
+
+            auto composite = [](int val) { return smart_ptr(new test_class_composite(val)); };
+            auto leaf = [](int val) { return smart_ptr(new test_class_leaf(val)); };
+            auto reference = [](const smart_ptr &ptr) { return smart_ptr(new test_class_reference(ptr)); };
+
+            obj.push_back(composite(1));
+            obj.push_back(composite(2));
+            obj.push_back(composite(3));
+            obj.push_back(leaf(2));
+
+            smart_ptr &composite_2 = *++obj.begin();
+            composite_2->push_back(reference(*obj.rbegin()));
+            composite_2->push_back(leaf(10));
+            obj.push_back(reference(composite_2));
+
+            return obj;
+        }
+
+        void run() override
+        {
+            auto pred = [](const auto &obj) { return obj->get_value() == 2; };
+           
+            {
+                test_class_composite obj = construct_obj();
+                const size_t size = obj.nested_hierarchy_size();
+
+                obj.remove_if(pred);
+
+                assert(obj.nested_hierarchy_size() == size - 5);
+
+                auto &cont = obj.cont();
+                assert(cont.end() == std::find_if(cont.begin(), cont.end(), pred));
+                assert(obj.df_pre_order_end() == std::find_if(obj.df_pre_order_begin(), obj.df_pre_order_end(), pred));
+            }
+
+            {
+                test_class_composite obj = construct_obj();
+                const size_t size = obj.nested_hierarchy_size();
+
+                obj.remove_if(pred, test_class_composite::nullify_references);
+
+                assert(obj.nested_hierarchy_size() == size - 4);
+                assert((*obj.rbegin())->is_null_reference());
+
+                auto &cont = obj.cont();
+                assert(obj.df_pre_order_end() == std::find_if(obj.df_pre_order_begin(), obj.df_pre_order_end(), pred));
+            }
         }
     };
 
@@ -573,8 +632,6 @@ namespace unittest
                 g = smart_ptr(new test_class_composite(6));
                 i = smart_ptr(new test_class_composite(7));
                 h = smart_ptr(new test_class_leaf(8));
-
-                //using smart_ptr_to_ref = test_class_composite_interface::smart_ptr_template<test_class_reference>;
 
                 auto traversable_reference = [](const smart_ptr &ptr)
                 {
@@ -1262,6 +1319,7 @@ namespace unittest
         tests.emplace_back(new copy_construction());
         tests.emplace_back(new move_construction());
         tests.emplace_back(new push_back_function());
+        tests.emplace_back(new remove_if_function());
         tests.emplace_back(new is_leaf_function());
         tests.emplace_back(new is_composite_function());
         tests.emplace_back(new clear_function());

@@ -206,27 +206,9 @@ public:
     using const_reverse_bf_hierarchical_iterator =
         bf_hierarchical_iterator_template<const_reverse_iterator, true>;
 
-    struct predicate
-    {
-        virtual bool operator()(const value_type &obj) = 0;
-    };
-
-    struct binary_predicate
-    {
-        virtual bool operator()(const value_type &a, const value_type &b) = 0;
-    };
-
-    enum references_remove_mode
-    {
-        do_not_track_references,
-        remove_references,
-        nullify_references
-    };
-
 public:
     virtual void push_back(const value_type &) = 0;
     virtual void push_back(value_type &&) = 0;
-    virtual void remove_if(predicate & function, const references_remove_mode mode = remove_references) = 0;
     virtual bool is_leaf() const = 0;
     virtual bool is_composite() const = 0;
     virtual bool is_reference() const noexcept = 0;
@@ -373,23 +355,38 @@ public:
         return const_reverse_bf_hierarchical_iterator();
     }
 
+    bool awaits_destruction() const noexcept
+    {
+        return _awaits_destruction;
+    }
+
     virtual ~abstract() noexcept
     {
     }
-};
 
-
-namespace
-{
-
-template <class Base>
-class interface_plug_in : public Base
-{
 public:
-    interface_plug_in() : Base()
+    virtual void mark_for_delete() noexcept
+    {
+        _awaits_destruction = true;
+    }
+
+    virtual void erase_awaiting_destruction()
     {
     }
 
+private:
+    bool _awaits_destruction{ false };
+};
+
+
+
+template <class Base>
+class leaf : public Base
+{
+    using self = leaf;
+    using parent = Base;
+
+public:
     using value_type = typename Base::iterator_traits::value_type;
     using raw_pointer_to_base_interface = typename Base::raw_pointer_to_base_interface;
 
@@ -397,31 +394,6 @@ public:
     using const_iterator = typename Base::const_iterator;
     using reverse_iterator = typename Base::reverse_iterator;
     using const_reverse_iterator = typename Base::const_reverse_iterator;
-
-    using df_pre_order_hierarchical_iterator = typename Base::df_pre_order_hierarchical_iterator;
-    using const_df_pre_order_hierarchical_iterator = typename Base::const_df_pre_order_hierarchical_iterator;
-    using reverse_df_pre_order_hierarchical_iterator = typename Base::reverse_df_pre_order_hierarchical_iterator;
-    using const_reverse_df_pre_order_hierarchical_iterator = typename Base::const_reverse_df_pre_order_hierarchical_iterator;
-
-    using df_post_order_hierarchical_iterator = typename Base::df_post_order_hierarchical_iterator;
-    using const_df_post_order_hierarchical_iterator = typename Base::const_df_post_order_hierarchical_iterator;
-    using reverse_df_post_order_hierarchical_iterator = typename Base::reverse_df_post_order_hierarchical_iterator;
-    using const_reverse_df_post_order_hierarchical_iterator = typename Base::const_reverse_df_post_order_hierarchical_iterator;
-
-    using bf_hierarchical_iterator = typename Base::bf_hierarchical_iterator;
-    using const_bf_hierarchical_iterator = typename Base::const_bf_hierarchical_iterator;
-    using reverse_bf_hierarchical_iterator = typename Base::reverse_bf_hierarchical_iterator;
-    using const_reverse_bf_hierarchical_iterator = typename Base::const_reverse_bf_hierarchical_iterator;
-};
-
-}
-
-
-template <class Base>
-class leaf : public interface_plug_in<Base>
-{
-    using self = leaf;
-    using parent = interface_plug_in<Base>;
 
 public:
     template <class IteratorBaseType>
@@ -504,13 +476,6 @@ public:
     void push_back(value_type &&another) override
     {
 
-    }
-
-    void remove_if(
-        typename parent::predicate &func,
-        const typename parent::references_remove_mode mode
-    ) override
-    {
     }
 
     iterator begin() override
@@ -604,13 +569,22 @@ public:
 };
 
 
+
 template <class Base, template <class T, class Alloc = std::allocator<T>> class Container>
-class composite : public interface_plug_in<Base>
+class composite : public Base
 {  
     using self = composite;
-    using parent = interface_plug_in<Base>;
+    using parent = Base;
 
 public:
+    using value_type = typename Base::iterator_traits::value_type;
+    using raw_pointer_to_base_interface = typename Base::raw_pointer_to_base_interface;
+
+    using iterator = typename Base::iterator;
+    using const_iterator = typename Base::const_iterator;
+    using reverse_iterator = typename Base::reverse_iterator;
+    using const_reverse_iterator = typename Base::const_reverse_iterator;
+
     using container_type = Container<value_type>;
     using initializer_list = std::initializer_list<value_type>;
 
@@ -828,19 +802,25 @@ public:
         children.push_back(std::move(another));
     }
 
-    void remove_if(
-        typename parent::predicate &func,
-        const typename parent::references_remove_mode mode
-    ) override
+
+    enum references_remove_mode
     {
-        if (mode == parent::do_not_track_references)
+        do_not_track_references,
+        remove_references,
+        nullify_references
+    };
+
+    template <class Pred>
+    void remove_if(Pred &func, const references_remove_mode mode = remove_references)
+    {
+        remove_if__mark_for_delete(func);
+
+        if (mode != do_not_track_references)
         {
-            remove_if__do_not_track_references_mode(func);
+            remove_if__handle_references(mode == nullify_references);
         }
-        else
-        {
-            remove_if__handle_references_mode(func, mode == parent::nullify_references);
-        }
+
+        erase_awaiting_destruction();
     }
 
     // linear iterators
@@ -953,63 +933,69 @@ private:
     {
     }
 
-    void erase(const_iterator position)
+    template <class Pred>
+    void remove_if__mark_for_delete(Pred &func)
     {
-        auto ptr_to_impl = position.get_impl().get();
-        auto real_impl = static_cast<const_iterator_impl*>(ptr_to_impl);
-        children.erase(real_impl->get_cont_iterator());
-    }
-
-    void remove_if__do_not_track_references_mode(typename parent::predicate &func)
-    {
-        for (auto it = cdf_post_order_begin(); it != cdf_post_order_end(); ++it)
+        for (auto &obj : children)
         {
-            const value_type &child = *it;
-            if (func(child))
+            if (!obj->is_reference())
             {
-                auto &linear_it = it.get_linear_iterator();
-                erase(linear_it);
+                if (func(obj))
+                {
+                    obj->mark_for_delete();
+                }
+                else if (obj->is_composite())
+                {
+                    static_cast<self*>(obj.get())->remove_if__mark_for_delete(func);
+                }
             }
         }
     }
 
-    void remove_if__handle_references_mode(typename parent::predicate &func, const bool nullify)
+    void remove_if__handle_references(const bool nullify)
     {
-        std::vector<const_iterator> objects, references;
-
-        for (auto it = cdf_post_order_begin(); it != cdf_post_order_end(); ++it)
+        for (auto &obj : children)
         {
-            const value_type &child = *it;
-            if (func(child))
+            if (obj->is_reference())
             {
-                auto &linear_it = it.get_linear_iterator();
-                if (!child->is_reference())
+                auto ref = static_cast<typename parent::reference*>(obj.get());
+                if (nullify)
                 {
-                    objects.push_back(linear_it);
+                    ref->reset();
                 }
                 else
                 {
-                    references.push_back(linear_it);
+                    ref->mark_for_delete();
                 }
             }
-        }
-
-        for (auto it = references.cbegin(); it != references.cend(); ++it)
-        {
-            if (nullify)
+            else if (obj->is_composite())
             {
-                raw_pointer_to_base_interface ptr = (*it)->get();
-                static_cast<typename parent::reference*>(ptr)->reset();
-            }
-            else
-            {
-                erase(*it);
+                static_cast<self*>(obj.get())->remove_if__handle_references(nullify);
             }
         }
+    }
 
-        for (auto it = objects.cbegin(); it != objects.cend(); ++it)
+protected:
+    void erase_awaiting_destruction() override
+    {
+        auto it = std::remove_if(children.begin(), children.end(),
+            [](const smart_ptr &obj) { return obj->awaits_destruction(); }
+        );
+
+        children.erase(it, children.end());
+
+        for (auto &obj : children)
         {
-            erase(*it);
+            obj->erase_awaiting_destruction();
+        }
+    }
+
+    void mark_for_delete() noexcept override
+    {
+        parent::mark_for_delete();
+        for (auto &obj : children)
+        {
+            obj->mark_for_delete();
         }
     }
 
@@ -1159,13 +1145,6 @@ public:
         ptr->push_back(std::move(another));
     }
 
-    void remove_if(
-        typename parent::predicate &func,
-        const typename parent::references_remove_mode mode) override
-    {
-        ptr->remove_if(func);
-    }
-
     iterator begin() override
     {
         return ptr->begin();
@@ -1312,13 +1291,6 @@ public:
     void push_back(value_type &&another) override
     {
        
-    }
-
-    void remove_if(
-        typename parent::predicate &func, 
-        const typename parent::references_remove_mode mode
-    ) override
-    {
     }
 
     iterator begin() override
@@ -1585,6 +1557,11 @@ public:
     }
 
     pointer_to_implementation &get_impl()
+    {
+        return impl;
+    }
+
+    const pointer_to_implementation &get_impl() const
     {
         return impl;
     }
@@ -1882,14 +1859,15 @@ public:
         push(node_iters{ _begin, _end, _begin });
     }
 
-    LinearIterator &get_linear_iterator()
+    LinearIterator get_linear_iterator() const
     {
         return top_it();
     }
 
-    const LinearIterator &get_linear_iterator() const
+    LinearIterator get_linear_iterator_to_parent() const
     {
-        return top_it();
+        const size_t size = iters.size();
+        return size > 1 ? iters[size - 2].current : LinearIterator();
     }
 
 private:
@@ -1953,7 +1931,6 @@ private:
         const auto &node = *top_it();
         return node->is_traversable() && node->size() > 0;
     }
-
 
 private:
     template <>
