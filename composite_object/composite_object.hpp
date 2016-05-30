@@ -33,11 +33,16 @@ struct default_pointer_model
     using type = std::unique_ptr<T, std::default_delete<T>>;
 };
 
-
 template <class T>
 struct shared_pointer_model
 {
     using type = std::shared_ptr<T>;
+};
+
+template <class T>
+struct default_container_type
+{
+    using type = std::list<T>;
 };
 
 
@@ -57,7 +62,7 @@ template <class Base>
 template
     <
     class Base,
-    template <class T, class Alloc = std::allocator<T>> class Container = std::list
+    template <class T> class Container = default_container_type
     >
     class composite;
 
@@ -66,11 +71,7 @@ template <class Base>
     class null_reference;
 
 
-template
-    <
-    class Base
-    //class NullReference = null_reference<Base>
-    >
+template <class Base>
     class reference;
 
 
@@ -111,6 +112,7 @@ template
 
 //
 
+
 template
 <
     class Base,
@@ -121,12 +123,25 @@ class abstract : public Base
 {
     using self = abstract;
 
+    template <class Base>
+        friend class leaf;
+
+    template
+        <
+        class Base,
+        template <class T> class Container
+        >
+        friend class composite;
+
+    template <class Base>
+        friend class reference;
+
 public:
     using smart_ptr = typename PointerModel<self>::type;
     using value_type = smart_ptr;
     using reference = composite_object::reference<self>;
-
     using raw_pointer_to_base_interface = self*;
+
 
     struct iterator_traits
     {
@@ -228,6 +243,16 @@ public:
     virtual reverse_iterator rend() = 0;
     virtual const_reverse_iterator crbegin() const = 0;
     virtual const_reverse_iterator crend() const = 0;
+
+    virtual raw_pointer_to_base_interface get_parent()
+    {
+        return _parent;
+    }
+
+    virtual const raw_pointer_to_base_interface get_parent() const
+    {
+        return _parent;
+    }
 
     // Pre-order iterators
 
@@ -364,7 +389,12 @@ public:
     {
     }
 
-public:
+protected:
+    virtual void set_parent(self * const ptr_to_parent)
+    {
+        _parent = ptr_to_parent;
+    }
+
     virtual void mark_for_delete() noexcept
     {
         _awaits_destruction = true;
@@ -373,6 +403,9 @@ public:
     virtual void erase_awaiting_destruction()
     {
     }
+
+protected:
+    raw_pointer_to_base_interface _parent{ nullptr };
 
 private:
     bool _awaits_destruction{ false };
@@ -570,7 +603,7 @@ public:
 
 
 
-template <class Base, template <class T, class Alloc = std::allocator<T>> class Container>
+template <class Base, template <class T> class Container>
 class composite : public Base
 {  
     using self = composite;
@@ -585,7 +618,7 @@ public:
     using reverse_iterator = typename Base::reverse_iterator;
     using const_reverse_iterator = typename Base::const_reverse_iterator;
 
-    using container_type = Container<value_type>;
+    using container_type = typename Container<value_type>::type;
     using initializer_list = std::initializer_list<value_type>;
 
 public:
@@ -771,15 +804,34 @@ public:
 
     composite(const self &another)
     {
+        _parent = another._parent;
         for (auto &ptr : another.children)
         {
-            children.emplace_back(value_type(ptr->clone()));
+            children.emplace_back(ptr->clone());
         }
     }
 
-    composite(self &&another)
-        : children(std::move(another.children))
+    composite(self &&another) :
+        children(std::move(another.children))
     {
+        _parent = another._parent;
+    }
+
+    self &operator=(const self &another)
+    {
+        set_parent(another.get_parent());
+        for (auto &ptr : another.children)
+        {
+            children.emplace_back(ptr->clone());
+        }
+        return *this;
+    }
+
+    self &operator=(self &&another)
+    {
+        set_parent(another.get_parent());
+        another.set_parent(nullptr);
+        children = std::move(another.children);
     }
 
     container_type &cont()
@@ -799,6 +851,7 @@ public:
 
     void push_back(value_type &&another) override
     {
+        another->set_parent(this);
         children.push_back(std::move(another));
     }
 
@@ -926,6 +979,7 @@ private:
     void push_back_impl(const value_type &val)
     {
         children.push_back(val);
+        children.back()->set_parent(this);
     }
 
     template<>
@@ -1253,6 +1307,11 @@ public:
     bool points_to(const smart_ptr &another_ptr) const noexcept
     {
         return ptr == another_ptr.get();
+    }
+
+    raw_pointer_to_base_interface get() const noexcept
+    {
+        return ptr;
     }
 
 protected:

@@ -17,7 +17,10 @@ namespace composite_object
 namespace unittest
 {
     class test_class_interface;
-    using test_class_composite_interface = composite_object::abstract<test_class_interface>;
+    using test_class_composite_interface = composite_object::abstract<
+        test_class_interface,
+        composite_object::default_pointer_model
+    >;
     class test_class_composite_base_impl;
     class test_class_composite;
     class test_class_leaf;
@@ -29,35 +32,6 @@ namespace unittest
         public:
             virtual const char * name() const = 0;
             virtual void run() = 0;
-        };
-
-
-        class object_lifetime_statistics
-        {
-        public:
-            object_lifetime_statistics() :
-                constructor_calls(0), destructor_calls(0)
-            {
-            }
-
-            void inc_constr_calls()
-            {
-                ++constructor_calls;
-            }
-
-            void inc_destr_calls()
-            {
-                ++destructor_calls;
-            }
-
-            bool is_lifetime_valid() const
-            {
-                return constructor_calls == destructor_calls;
-            }
-
-        private:
-            unsigned int constructor_calls;
-            unsigned int destructor_calls;
         };
     }
 
@@ -75,12 +49,10 @@ namespace unittest
     public:
         test_class_composite_base_impl()
         {
-            obj_lifetime_stat.inc_constr_calls();
         }
 
         test_class_composite_base_impl(int value) : value(value)
         {
-            obj_lifetime_stat.inc_constr_calls();
         }
 
         int get_value() const override
@@ -95,25 +67,11 @@ namespace unittest
 
         ~test_class_composite_base_impl()
         {
-            obj_lifetime_stat.inc_destr_calls();
-        }
-
-        static object_lifetime_statistics get_obj_lifetime_stat()
-        {
-            return obj_lifetime_stat;
-        }
-
-        static void reset_obj_lifetime_stat()
-        {
-            obj_lifetime_stat = object_lifetime_statistics{};
         }
 
     private:
         int value{ 0 };
-        static object_lifetime_statistics obj_lifetime_stat;
     };
-
-    object_lifetime_statistics test_class_composite_base_impl::obj_lifetime_stat;
 
 
     class test_class_composite : public composite_object::composite<test_class_composite_base_impl>
@@ -251,7 +209,7 @@ namespace unittest
         void run() override
         {
             const int val = 100500;
-            auto obj = std::make_shared<test_class_composite>(val);
+            auto obj = std::make_unique<test_class_composite>(val);
             assert(obj->get_value() == val);
         }
     };
@@ -603,6 +561,22 @@ namespace unittest
         }
     };
 
+    struct pointer_to_parent : public test, public basic_test_setup
+    {
+        const char * name() const override { return "Pointer to parent"; }
+
+        void run() override
+        {
+            using smart_ptr = typename test_class_composite_interface::smart_ptr;
+            assert(leaf_a.get_parent() == nullptr);
+            const auto &front = *obj.cbegin();
+            const auto &back = *obj.crbegin();
+            assert(front->get_parent() != nullptr);
+            assert(front->get_parent() == back->get_parent());
+            assert(leaf_a.get()->get_parent() == &obj);
+            assert(leaf_c.get()->get_parent() == composite_c.get());
+        }
+    };
 
     namespace iterators
     {
@@ -1326,6 +1300,7 @@ namespace unittest
         tests.emplace_back(new size_function());
         tests.emplace_back(new nested_hierarchy_size_function());
         tests.emplace_back(new iterators_returning_functions());
+        tests.emplace_back(new pointer_to_parent());
 
         // Iterators checks
 
