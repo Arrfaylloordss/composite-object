@@ -567,7 +567,6 @@ namespace unittest
 
         void run() override
         {
-            using smart_ptr = typename test_class_composite_interface::smart_ptr;
             assert(leaf_a.get_parent() == nullptr);
             const auto &front = *obj.cbegin();
             const auto &back = *obj.crbegin();
@@ -575,6 +574,28 @@ namespace unittest
             assert(front->get_parent() == back->get_parent());
             assert(leaf_a.get()->get_parent() == &obj);
             assert(leaf_c.get()->get_parent() == composite_c.get());
+        }
+    };
+
+    struct relocate_to_function: public test, public basic_test_setup
+    {
+        const char * name() const override { return "`relocate_to` function"; }
+
+        void run() override
+        {
+            const size_t size_before_relocation = obj.size();
+            auto &leaf_a = *obj.begin();
+            auto &composite_c = *obj.rbegin();
+            leaf_a->relocate_to(composite_c);
+            assert(obj.size() == size_before_relocation - 1);
+            assert((*composite_c->rbegin())->get_parent() == composite_c.get());
+
+            using smart_ptr = typename test_class_composite_interface::smart_ptr;
+            obj.push_back(smart_ptr(new test_class_leaf(100500)));
+            auto &leaf_b = *obj.begin();
+            auto &leaf_new = *obj.rbegin();
+            leaf_b->relocate_to(leaf_new); //fail, can't move to leaf.
+            assert(leaf_b->get_parent() == leaf_new->get_parent());
         }
     };
 
@@ -1301,6 +1322,7 @@ namespace unittest
         tests.emplace_back(new nested_hierarchy_size_function());
         tests.emplace_back(new iterators_returning_functions());
         tests.emplace_back(new pointer_to_parent());
+        tests.emplace_back(new relocate_to_function());
 
         // Iterators checks
 

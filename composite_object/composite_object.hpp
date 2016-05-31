@@ -238,14 +238,25 @@ public:
     virtual const_reverse_iterator crbegin() const = 0;
     virtual const_reverse_iterator crend() const = 0;
 
-    virtual raw_pointer_to_base_interface get_parent()
+    virtual raw_pointer_to_base_interface get_parent() const
     {
         return _parent;
     }
 
-    virtual const raw_pointer_to_base_interface get_parent() const
+    void relocate_to(value_type &another)
     {
-        return _parent;
+        if (another->is_composite())
+        {
+            auto p = get_parent();
+            if (p)
+            {
+                p->relocate_child(this, another);
+            }
+            else
+            {
+                another->push_back(smart_ptr(this));
+            }
+        }
     }
 
     // Pre-order iterators
@@ -395,6 +406,10 @@ protected:
     }
 
     virtual void erase_awaiting_destruction()
+    {
+    }
+
+    virtual void relocate_child(raw_pointer_to_base_interface const child, value_type &another)
     {
     }
 
@@ -1024,6 +1039,15 @@ private:
     }
 
 protected:
+    void relocate_child(raw_pointer_to_base_interface const child, value_type &another) override
+    {
+        auto it = std::find_if(children.begin(), children.end(),
+            [child](const auto &ptr) {return ptr.get() == child; });
+
+        another->push_back(*it); //move
+        children.erase(it);
+    }
+
     void erase_awaiting_destruction() override
     {
         auto it = std::remove_if(children.begin(), children.end(),
