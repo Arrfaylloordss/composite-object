@@ -34,12 +34,6 @@ struct default_pointer_model
 };
 
 template <class T>
-struct shared_pointer_model
-{
-    using type = std::shared_ptr<T>;
-};
-
-template <class T>
 struct default_container_type
 {
     using type = std::list<T>;
@@ -1809,9 +1803,8 @@ class df_hierarchical_iterator_template :
 
     struct node_iters
     {
-        LinearIterator begin;
-        LinearIterator end;
         LinearIterator current;
+        LinearIterator end;
     };
 
     using stack_container_type = std::vector<node_iters>;
@@ -1836,7 +1829,7 @@ public:
     explicit df_hierarchical_iterator_template(const LinearIterator &root_begin,
         const LinearIterator &root_end)
     {
-        push(node_iters{ root_begin, root_end, root_begin });
+        push(node_iters{ root_begin, root_end });
         init();
     }
 
@@ -1915,7 +1908,7 @@ public:
         LinearIterator _begin, _end;
         begin<container_type>()(cont, _begin);
         end<container_type>()(cont, _end);
-        push(node_iters{ _begin, _end, _begin });
+        push(node_iters{ _begin, _end });
     }
 
     LinearIterator get_linear_iterator() const
@@ -1938,16 +1931,6 @@ private:
     const LinearIterator &top_it() const
     {
         return top().current;
-    }
-
-    LinearIterator &top_it_begin()
-    {
-        return top().begin;
-    }
-
-    const LinearIterator &top_it_begin() const
-    {
-        return top().begin;
     }
 
     LinearIterator &top_it_end()
@@ -2164,12 +2147,7 @@ public:
         return iters.empty();
     }
 
-    LinearIterator &get_linear_iterator()
-    {
-        return current_it();
-    }
-
-    const LinearIterator &get_linear_iterator() const
+    LinearIterator get_linear_iterator() const
     {
         return current_it();
     }
