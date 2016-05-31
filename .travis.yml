@@ -1,0 +1,7 @@
+language: cpp
+
+compiler:
+  - clang
+  - gcc
+
+script: ctest --build-and-test --build-generator "Unix Makefiles" --build-config "Debug" --build-options -DWITH_TESTS:BOOL=ON
