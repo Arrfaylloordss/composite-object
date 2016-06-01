@@ -17,3 +17,13 @@ License
 -------
 Copyright Andrey Lifanov 2016.
 Boost Software License Version 1.0 (http://www.boost.org/LICENSE_1_0.txt).
+
+Travis CI status
+----------------
+Master branch:
+
+[![Build Status](https://travis-ci.org/AndrSar/composite-object.svg?branch=master)](https://travis-ci.org/AndrSar/composite-object)
+
+Develop branch:
+
+[![Build Status](https://travis-ci.org/AndrSar/composite-object.svg?branch=develop)](https://travis-ci.org/AndrSar/composite-object)

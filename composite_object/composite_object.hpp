@@ -18,6 +18,7 @@
 #include <utility>
 #include <initializer_list>
 #include <functional>
+#include <cstddef>
 
 #ifdef _MSC_VER
     #pragma warning( disable : 4503)
@@ -117,17 +118,17 @@ class abstract : public Base
 {
     using self = abstract;
 
-    template <class Base>
+    template <class _Base>
         friend class leaf;
 
     template
         <
-        class Base,
+        class _Base,
         template <class T> class Container
         >
         friend class composite;
 
-    template <class Base>
+    template <class _Base>
         friend class reference;
 
 public:
@@ -140,7 +141,7 @@ public:
     struct iterator_traits
     {
         using iterator_category    = BaseIteratorCategory;
-        using value_type           = value_type;
+        using value_type           = smart_ptr;
         using const_value_type     = const value_type;
         using reference            = value_type&;
         using const_reference      = const_value_type&;
@@ -612,6 +613,19 @@ public:
 
 
 
+namespace
+{
+
+template <class Composite, bool is_copy_constructible>
+    struct composite_push_back_impl;
+
+
+template <class IteratorTag, class Iterator>
+    struct composite_iterator_categoty_impl;
+
+}
+
+
 template <class Base, template <class T> class Container>
 class composite : public Base
 {  
@@ -620,6 +634,7 @@ class composite : public Base
 
 public:
     using value_type = typename Base::iterator_traits::value_type;
+    using smart_ptr = typename Base::smart_ptr;
     using raw_pointer_to_base_interface = typename Base::raw_pointer_to_base_interface;
 
     using iterator = typename Base::iterator;
@@ -631,79 +646,6 @@ public:
     using initializer_list = std::initializer_list<value_type>;
 
 public:
-    template <class IteratorTag, class Iterator>
-    struct iterator_impl_specific
-    {
-        using difference_type = typename Iterator::difference_type;
-
-        static bool less(const Iterator &a, const Iterator &b)
-        {
-            return a < b;
-        }
-
-        static bool greater(const Iterator &a, const Iterator &b)
-        {
-            return a > b;
-        }
-
-        static typename Iterator::reference offset(const Iterator &it, const difference_type diff)
-        {
-            return it[diff];
-        }
-
-        static Iterator advance_forwards(Iterator &it, const difference_type diff)
-        {
-            return it + diff;
-        }
-
-        static Iterator advance_backwards(Iterator &it, const difference_type diff)
-        {
-            return it - diff;
-        }
-
-        static difference_type difference(const Iterator &a, const Iterator &b)
-        {
-            return a - b;
-        }
-    };
-
-    template <class Iterator>
-    struct iterator_impl_specific<std::bidirectional_iterator_tag, Iterator>
-    {
-        using difference_type = typename Iterator::difference_type;
-
-        static bool less(const Iterator &a, const Iterator &b)
-        {
-            return false;
-        }
-
-        static bool greater(const Iterator &a, const Iterator &b)
-        {
-            return false;
-        }
-
-        static typename Iterator::reference offset(const Iterator &it, const difference_type diff)
-        {
-            static typename Iterator::pointer obj = nullptr;
-            return *obj;
-        }
-
-        static Iterator advance_forwards(Iterator &it, const difference_type diff)
-        {
-            return it;
-        }
-
-        static Iterator advance_backwards(Iterator &it, const difference_type diff)
-        {
-            return it;
-        }
-
-        static difference_type difference(const Iterator &a, const Iterator &b)
-        {
-            return difference_type{};
-        }
-    };
-
     template <class IteratorBaseType, class UnderlyingContainerIterator>
     class iterator_impl_template : public IteratorBaseType::implementation
     {
@@ -716,8 +658,15 @@ public:
         using self = typename IteratorBaseType::implementation;
         using base_interface = typename self::base_interface;
 
+    private:
+        using iterator_impl_specialization = composite_iterator_categoty_impl<category, UnderlyingContainerIterator>;
+
     public:
         iterator_impl_template(UnderlyingContainerIterator &it) : _it(it)
+        {
+        }
+
+        iterator_impl_template(UnderlyingContainerIterator &&it) : _it(std::move(it))
         {
         }
 
@@ -753,32 +702,32 @@ public:
 
         bool less(const base_interface *another) const override
         {
-            return iterator_impl_specific<category, UnderlyingContainerIterator>::less(_it, upcast(another)->_it);
+            return iterator_impl_specialization::less(_it, upcast(another)->_it);
         }
 
         bool greater(const base_interface *another) const override
         {
-            return iterator_impl_specific<category, UnderlyingContainerIterator>::greater(_it, upcast(another)->_it);
+            return iterator_impl_specialization::greater(_it, upcast(another)->_it);
         }
 
         reference offset(const difference_type diff) const override
         {
-            return iterator_impl_specific<category, UnderlyingContainerIterator>::offset(_it, diff);
+            return iterator_impl_specialization::offset(_it, diff);
         }
 
         void advance_forwards(const difference_type diff) override
         {
-            _it = iterator_impl_specific<category, UnderlyingContainerIterator>::advance_forwards(_it, diff);
+            _it = iterator_impl_specialization::advance_forwards(_it, diff);
         }
 
         void advance_backwards(const difference_type diff) override
         {
-            _it = iterator_impl_specific<category, UnderlyingContainerIterator>::advance_forwards(_it, diff);
+            _it = iterator_impl_specialization::advance_forwards(_it, diff);
         }
 
         difference_type difference(const base_interface *another) const override
         {
-            return iterator_impl_specific<category, UnderlyingContainerIterator>::difference(_it, upcast(another)->_it);
+            return iterator_impl_specialization::difference(_it, upcast(another)->_it);
         }
 
         UnderlyingContainerIterator get_cont_iterator() const
@@ -813,7 +762,7 @@ public:
 
     composite(const self &another)
     {
-        _parent = another._parent;
+        this->_parent = another._parent;
         for (auto &ptr : another.children)
         {
             children.emplace_back(ptr->clone());
@@ -823,7 +772,7 @@ public:
     composite(self &&another) :
         children(std::move(another.children))
     {
-        _parent = another._parent;
+        this->_parent = another._parent;
     }
 
     self &operator=(const self &another)
@@ -855,7 +804,7 @@ public:
 
     void push_back(const value_type &another) override
     {
-        push_back_impl<std::is_copy_constructible<value_type>::value>(another);
+        composite_push_back_impl<self, std::is_copy_constructible<value_type>::value>::call(this, another);
     }
 
     void push_back(value_type &&another) override
@@ -884,8 +833,6 @@ public:
 
         erase_awaiting_destruction();
     }
-
-    // linear iterators
 
     iterator begin() override
     {
@@ -984,18 +931,6 @@ public:
     }
 
 private:
-    template <bool is_copy_constructible>
-    void push_back_impl(const value_type &val)
-    {
-        children.push_back(val);
-        children.back()->set_parent(this);
-    }
-
-    template<>
-    void push_back_impl<false>(const value_type &val)
-    {
-    }
-
     template <class Pred>
     void remove_if__mark_for_delete(Pred &func)
     {
@@ -1074,6 +1009,106 @@ protected:
 protected:
     container_type children;
 };
+
+
+
+namespace
+{
+
+template <class Composite, bool is_copy_constructible>
+struct composite_push_back_impl
+{
+    static void call(Composite const *ptr, const typename Composite::value_type &val)
+    {
+        ptr->cont().push_back(val);
+        ptr->cont().back()->set_parent(ptr);
+    }
+};
+
+template <class Composite>
+struct composite_push_back_impl<Composite, false>
+{
+    static void call(Composite const *ptr, const typename Composite::value_type &val)
+    {
+    }
+};
+
+
+template <class IteratorTag, class Iterator>
+struct composite_iterator_categoty_impl
+{
+    using difference_type = typename Iterator::difference_type;
+
+    static bool less(const Iterator &a, const Iterator &b)
+    {
+        return a < b;
+    }
+
+    static bool greater(const Iterator &a, const Iterator &b)
+    {
+        return a > b;
+    }
+
+    static typename Iterator::reference offset(const Iterator &it, const difference_type diff)
+    {
+        return it[diff];
+    }
+
+    static Iterator advance_forwards(Iterator &it, const difference_type diff)
+    {
+        return it + diff;
+    }
+
+    static Iterator advance_backwards(Iterator &it, const difference_type diff)
+    {
+        return it - diff;
+    }
+
+    static difference_type difference(const Iterator &a, const Iterator &b)
+    {
+        return a - b;
+    }
+};
+
+
+template <class Iterator>
+struct composite_iterator_categoty_impl<std::bidirectional_iterator_tag, Iterator>
+{
+    using difference_type = typename Iterator::difference_type;
+
+    static bool less(const Iterator &a, const Iterator &b)
+    {
+        return false;
+    }
+
+    static bool greater(const Iterator &a, const Iterator &b)
+    {
+        return false;
+    }
+
+    static typename Iterator::reference offset(const Iterator &it, const difference_type diff)
+    {
+        static typename Iterator::pointer obj = nullptr;
+        return *obj;
+    }
+
+    static Iterator advance_forwards(Iterator &it, const difference_type diff)
+    {
+        return it;
+    }
+
+    static Iterator advance_backwards(Iterator &it, const difference_type diff)
+    {
+        return it;
+    }
+
+    static difference_type difference(const Iterator &a, const Iterator &b)
+    {
+        return difference_type{};
+    }
+};
+
+} // hidden composite impl details namespace
 
 
 
@@ -1468,7 +1503,11 @@ template <class Category,
 class polymorphic_iterator_template : public std::iterator<Category, T, Distance, Pointer, Reference>
 {
     using self = polymorphic_iterator_template;
+
 public:
+    using pointer = Pointer;
+    using reference = Reference;
+    using difference_type = Distance;
     const static bool is_reversed = reversed;
 
     class common_implementation
@@ -1506,9 +1545,12 @@ public:
     {
     }
 
-    polymorphic_iterator_template(const self &another) :
-        impl(another.impl->clone())
+    polymorphic_iterator_template(const self &another)
     {
+        if (another.impl)
+        {
+            impl.reset(another.impl->clone());
+        }
     }
 
     polymorphic_iterator_template(self &&another) :
@@ -1520,7 +1562,14 @@ public:
     {
         if (*this != another)
         {
-            impl.reset(another.impl->clone());
+            if (another.impl)
+            {
+                impl.reset(another.impl->clone());
+            }
+            else
+            {
+                impl.reset();
+            }
         }
         return *this;
     }
@@ -1543,7 +1592,7 @@ public:
         }
     }
 
-    bool operator!=(const polymorphic_iterator_template &another) const
+    bool operator!=(const self &another) const
     {
         return !(*this == another);
     }
@@ -1665,6 +1714,10 @@ class polymorphic_iterator_template<std::bidirectional_iterator_tag, T, Distance
 
 public:
     using iterator_category = std::bidirectional_iterator_tag;
+    using pointer = Pointer;
+    using reference = Reference;
+    using difference_type = Distance;
+    using common_implementation = typename parent::common_implementation;
 
     class bidirectional_implementation : public common_implementation
     {
@@ -1712,12 +1765,8 @@ public:
     {
     }
 
-    polymorphic_iterator_template(const self &another)
+    polymorphic_iterator_template(const self &another) : parent(another)
     {
-        if (another.impl)
-            this->impl.reset(another.impl->clone());
-        else
-            this->impl.reset();
     }
 
     polymorphic_iterator_template(self &&another)
@@ -1727,17 +1776,19 @@ public:
 
     self &operator=(const self &another)
     {
-        if (*this != another)
-        {
-            impl.reset(another.impl->clone());
-        }
+        parent::operator=(another);
         return *this;
     }
 
     self &operator=(self &&another)
     {
-        impl = std::move(another.impl);
+        parent::operator=(std::move(another));
         return *this;
+    }
+
+    bool operator==(const self &another) const
+    {
+        return parent::operator==(another);
     }
 
     self operator+(const difference_type offset) = delete;
@@ -1812,6 +1863,89 @@ struct inherit_const
 
 // Hierarchical iterators
 
+namespace
+{
+    template <class Iter, const df_traverse_algorithm a>
+    struct df_traverse_algorithm_impl
+    {
+        static void init(Iter &it) {}
+        static void next(Iter &it) {}
+    };
+
+    template <class Iter>
+    struct df_traverse_algorithm_impl<Iter, df_traverse_algorithm::pre_order>
+    {
+        static void init(Iter &it)
+        {
+        }
+
+        static void next(Iter &it)
+        {
+            if (it.can_go_down())
+            {
+                it.go_down();
+                return;
+            }
+
+            while ((++it.top_it()) == it.top_it_end())
+            {
+                if (it.iters.size() == 1) break;
+                it.return_up();
+            }
+        }
+    };
+
+    template <class Iter>
+    struct df_traverse_algorithm_impl<Iter, df_traverse_algorithm::post_order>
+    {
+        static void init(Iter &it)
+        {
+            if (it.top_it() != it.top_it_end())
+            {
+                while (it.can_go_down())
+                {
+                    it.go_down();
+                }
+            }
+        }
+
+        static void next(Iter &it)
+        {
+            if ((++it.top_it()) == it.top_it_end())
+            {
+                if (it.iters.size() != 1)
+                {
+                    it.return_up();
+                }
+                return;
+            }
+
+            while (it.can_go_down())
+            {
+                it.go_down();
+            }
+        }
+    };
+}
+
+
+template <class Iter>
+struct node_iters
+{
+    Iter current;
+    Iter end;
+
+    node_iters()
+    {
+    }
+
+    node_iters(Iter &&a, Iter &&b) :
+        current(std::move(a)), end(std::move(b))
+    {
+    }
+};
+
+
 template <class LinearIterator, const df_traverse_algorithm traverse_algorithm_param, bool reversed>
 class df_hierarchical_iterator_template :
     public std::iterator
@@ -1825,35 +1959,29 @@ class df_hierarchical_iterator_template :
 {
     using self = df_hierarchical_iterator_template;
 
-    struct node_iters
-    {
-        LinearIterator current;
-        LinearIterator end;
-    };
+    using node_iters_type = node_iters<LinearIterator>;
+    using stack_container_type = std::vector<node_iters_type>;
 
-    using stack_container_type = std::vector<node_iters>;
+    friend struct df_traverse_algorithm_impl<self, df_traverse_algorithm::pre_order>;
+    friend struct df_traverse_algorithm_impl<self, df_traverse_algorithm::post_order>;
 
-    template <const df_traverse_algorithm a>
-    struct traverse_algorithm_impl
-    {
-        static void init(df_hierarchical_iterator_template &it) {}
-        static void next(df_hierarchical_iterator_template &it) {}
-    };
+    using traverse_algorithm = df_traverse_algorithm_impl<self, traverse_algorithm_param>;
 
-    friend struct traverse_algorithm_impl<df_traverse_algorithm::pre_order>;
-    friend struct traverse_algorithm_impl<df_traverse_algorithm::post_order>;
-
-    using traverse_algorithm = traverse_algorithm_impl<traverse_algorithm_param>;
+public:
+    using iterator_category = typename LinearIterator::iterator_category;
+    using value_type = typename LinearIterator::value_type;
+    using pointer = typename LinearIterator::pointer;
+    using reference = typename LinearIterator::reference;
+    using difference_type = typename LinearIterator::difference_type;
 
 public:
     df_hierarchical_iterator_template()
     {
     }
 
-    explicit df_hierarchical_iterator_template(const LinearIterator &root_begin,
-        const LinearIterator &root_end)
+    explicit df_hierarchical_iterator_template(LinearIterator &&root_begin, LinearIterator &&root_end)
     {
-        push(node_iters{ root_begin, root_end });
+        push(node_iters_type(std::move(root_begin), std::move(root_end)));
         init();
     }
 
@@ -1932,7 +2060,7 @@ public:
         LinearIterator _begin, _end;
         begin<container_type>()(cont, _begin);
         end<container_type>()(cont, _end);
-        push(node_iters{ _begin, _end });
+        push(node_iters_type(std::move(_begin), std::move(_end)));
     }
 
     LinearIterator get_linear_iterator() const
@@ -1972,9 +2100,9 @@ private:
         traverse_algorithm::init(*this);
     }
 
-    void push(typename stack_container_type::reference pair)
+    void push(node_iters_type &&pair)
     {
-        iters.push_back(pair);
+        iters.push_back(std::move(pair));
     }
 
     void pop()
@@ -1999,62 +2127,6 @@ private:
     }
 
 private:
-    template <>
-    struct traverse_algorithm_impl<df_traverse_algorithm::pre_order>
-    {
-        static void init(df_hierarchical_iterator_template &it)
-        {
-        }
-
-        static void next(df_hierarchical_iterator_template &it)
-        {
-            if (it.can_go_down())
-            {
-                it.go_down();
-                return;
-            }
-
-            while ((++it.top_it()) == it.top_it_end())
-            {
-                if (it.iters.size() == 1) break;
-                it.return_up();
-            }
-        }
-    };
-
-    template <>
-    struct traverse_algorithm_impl<df_traverse_algorithm::post_order>
-    {
-        static void init(df_hierarchical_iterator_template &it)
-        {
-            if (it.top_it() != it.top_it_end())
-            {
-                while (it.can_go_down())
-                {
-                    it.go_down();
-                }
-            }
-        }
-
-        static void next(df_hierarchical_iterator_template &it)
-        {
-            if ((++it.top_it()) == it.top_it_end())
-            {
-                if (it.iters.size() != 1)
-                {
-                    it.return_up();
-                }
-                return;
-            }
-
-            while (it.can_go_down())
-            {
-                it.go_down();
-            }
-        }
-    };
-
-private:
     stack_container_type iters;
 };
 
@@ -2073,22 +2145,24 @@ class bf_hierarchical_iterator_template :
 {
     using self = bf_hierarchical_iterator_template;
 
-    struct node_iters
-    {
-        LinearIterator current;
-        LinearIterator end;
-    };
+    using node_iters_type = node_iters<LinearIterator>;
+    using queue_container_type = std::queue<node_iters_type>;
 
-    using queue_container_type = std::queue<node_iters>;
+public:
+    using iterator_category = typename LinearIterator::iterator_category;
+    using value_type = typename LinearIterator::value_type;
+    using pointer = typename LinearIterator::pointer;
+    using reference = typename LinearIterator::reference;
+    using difference_type = typename LinearIterator::difference_type;
 
 public:
     bf_hierarchical_iterator_template()
     {
     }
 
-    explicit bf_hierarchical_iterator_template(const LinearIterator &root_begin, const LinearIterator &root_end)
+    explicit bf_hierarchical_iterator_template(LinearIterator &&root_begin, LinearIterator &&root_end)
     {
-        push(node_iters{ root_begin, root_end});
+        push(node_iters_type(std::move(root_begin), std::move(root_end)));
     }
 
     bf_hierarchical_iterator_template(const self &another) :
@@ -2206,13 +2280,13 @@ private:
             LinearIterator _begin, _end;
             begin<container_type>()(cont, _begin);
             end<container_type>()(cont, _end);
-            iters.emplace(node_iters{ _begin, _end });
+            iters.emplace(std::move(_begin), std::move(_end));
         }
     }
 
-    void push(typename queue_container_type::reference pair)
+    void push(node_iters_type &&pair)
     {
-        iters.push(pair);
+        iters.push(std::move(pair));
     }
 
     void pop()
@@ -2248,6 +2322,13 @@ class iter_wrapper : public std::iterator
     typename CompositeObjectIterator::value_type::element_type
     >
 {
+public:
+    using iterator_category = typename CompositeObjectIterator::iterator_category;
+    using value_type = typename CompositeObjectIterator::value_type;
+    using pointer = typename CompositeObjectIterator::pointer;
+    using reference = typename CompositeObjectIterator::reference;
+    using difference_type = typename CompositeObjectIterator::difference_type;
+
 public:
     iter_wrapper() {}
 

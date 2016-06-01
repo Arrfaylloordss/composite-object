@@ -25,15 +25,13 @@ namespace unittest
     class test_class_composite;
     class test_class_leaf;
 
-    namespace
+
+    class test
     {
-        class test
-        {
-        public:
-            virtual const char * name() const = 0;
-            virtual void run() = 0;
-        };
-    }
+    public:
+        virtual const char * name() const = 0;
+        virtual void run() = 0;
+    };
 
 
     class test_class_interface
@@ -673,7 +671,7 @@ namespace unittest
                 void run() override
                 {
                     test_class_composite_interface::iterator it = obj.begin();
-                    auto it_copy{ it };
+                    auto it_copy(it);
                     assert(!it.empty());
                     assert(!it_copy.empty());
                     assert(it == it_copy);
@@ -692,7 +690,7 @@ namespace unittest
                 void run() override
                 {
                     test_class_composite_interface::iterator it = obj.begin();
-                    auto it_moved{ std::move(it) };
+                    auto it_moved(std::move(it));
                     assert(it.empty());
                     assert(!it_moved.empty());
                     assert(it != it_moved);
@@ -816,7 +814,7 @@ namespace unittest
                 void run() override
                 {
                     test_class_composite_interface::reverse_iterator it = obj.rbegin();
-                    auto it_copy{ it };
+                    auto it_copy(it);
                     assert(!it.empty());
                     assert(!it_copy.empty());
                     assert(it == it_copy);
@@ -835,7 +833,7 @@ namespace unittest
                 void run() override
                 {
                     auto it = obj.rbegin();
-                    auto it_moved{ std::move(it) };
+                    auto it_moved(std::move(it));
                     assert(it.empty());
                     assert(!it_moved.empty());
                     assert(it != it_moved);
@@ -962,7 +960,7 @@ namespace unittest
                 void run() override
                 {
                     test_class_composite_interface::df_pre_order_hierarchical_iterator it = f->df_pre_order_begin();
-                    auto it_copy{ it };
+                    auto it_copy(it);
                     assert(!it.empty());
                     assert(!it_copy.empty());
                     assert(it == it_copy);
@@ -981,7 +979,7 @@ namespace unittest
                 void run() override
                 {
                     auto it = f->df_pre_order_begin();
-                    auto it_moved{ std::move(it) };
+                    auto it_moved(std::move(it));
                     assert(it.empty());
                     assert(!it_moved.empty());
                     assert(it != it_moved);
@@ -1165,7 +1163,7 @@ namespace unittest
                 void run() override
                 {
                     test_class_composite_interface::bf_hierarchical_iterator it = f->bf_begin();
-                    auto it_copy{ it };
+                    auto it_copy(it);
                     assert(!it.empty());
                     assert(!it_copy.empty());
                     assert(it == it_copy);
@@ -1184,7 +1182,7 @@ namespace unittest
                 void run() override
                 {
                     auto it = f->bf_begin();
-                    auto it_moved{ std::move(it) };
+                    auto it_moved(std::move(it));
                     assert(it.empty());
                     assert(!it_moved.empty());
                     assert(it != it_moved);
