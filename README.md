@@ -7,7 +7,7 @@ Read about Composite pattern on https://en.wikipedia.org/wiki/Composite_pattern.
 
 Composite object allows creation and maintenance of natural and complex hierarchies of objects. It's fundamental part of almost any program, and a good realization of this pattern and accompanying elements is a key to solid program architecture.
 
-Such well knows data structures as file systems, scene graphs, ASTs, GUI components and resources' assets managers are all based on composite object concept. Usually programmers tend to reimplement this pattern every time they write new programs, what is time consuming and error-prone, with the necessity to write a huge amount of good tests. Also C++ is a language which infers additional complication. This is a case when generic template programming may help: implement once and just specialize for every particular need.
+Such well known data structures as file systems, scene graphs, ASTs, GUI components and resources' assets managers are all based on composite object concept. Usually programmers tend to reimplement this pattern every time they write new programs, what is time consuming and error-prone, with the necessity to write a huge amount of good tests. Also C++ is a language which infers additional complication. This is a case when generic template programming may help: implement once and just specialize for every particular need.
 
 Although idea of writing a template solution looks simple, many problems have to be faced during C++ coding.
 
