@@ -5,7 +5,7 @@ C++14 Composite pattern implementation following C++ STL style and iterators app
 
 Read about Composite pattern on https://en.wikipedia.org/wiki/Composite_pattern.
 
-Composite object allows creation and maintenance of natural and complex hieararchies of objects. It's fundamental part of almost any program, and a good realization of this pattern and accompanying elements is a key to solid program architecture.
+Composite object allows creation and maintenance of natural and complex hierarchies of objects. It's fundamental part of almost any program, and a good realization of this pattern and accompanying elements is a key to solid program architecture.
 
 Such well knows data structures as file systems, scene graphs, GUI components and resources' assets managers are all based on composite object concept. Usually programmers tend to reimplement this pattern every time they write new program, what is time consuming and error-prone, with the necessity to write a huge amount of good tests. Also C++ is a language which implies additional complications to this process. This is a case when generic template programming may help: implement once and just specialize for every particular needs.
 
@@ -13,15 +13,15 @@ Although idea of writing a template library is simple, but, as you can see from 
 
 The key requirements of the composite object for real programs are:
 
-- ability to form inlined hierarchies;
+- ability to form inline hierarchies;
 - ability to traverse the formed tree with known depth-first and breadth-first algorithms;
 - polymorphic iterators which abstracts from the concrete containers and storage models;
 - convenient references and tracking of them (like dealing with so called dangling pointers and null references);
 - serialization and easy interaction with databases;
 - solid cooperation with other patterns and STL;
-- memory releated optimizations.
+- memory related optimizations.
 
-Thus, these are feautures which are pursed in this project.
+Thus, these are features which are pursed in this project.
 
 *Note:* under development, use with caution. Help is appreciated.
 
