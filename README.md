@@ -1,6 +1,8 @@
 Composite Pattern C++ Template Library
 ======================================
 
+*Note*: this project is experimental and for learning purpose only.
+
 C++14 Composite pattern implementation following C++ STL style and iterators approach (which makes it available for using in STL algorithms).
 
 Read about Composite pattern on https://en.wikipedia.org/wiki/Composite_pattern.
@@ -23,8 +25,6 @@ The key requirements of the composite object for real programs are:
 - memory related optimizations.
 
 Thus, these are features which are pursued by this project.
-
-*Note:* under development, use with caution. Help is appreciated.
 
 Installation
 ------------
